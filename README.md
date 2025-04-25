@@ -99,6 +99,7 @@ make sdk_install_pkg
 ls -al /opt/intel/
 sudo ./linux/installer/bin/sgx_linux_x64_sdk_2.25.100.3.bin
 source /opt/intel/sgxsdk/environment
+
 cd SampleCode/LocalAttestation
 make SGX_MODE=SIM
 cd bin
@@ -115,6 +116,11 @@ cd bin/
 cd ../../SampleEnclave
 make clean && make SGX_MODE=HW
 ./app 
+```
+6. **Enclave_private.pem**
+```
+sudo openssl genrsa -3 -out /opt/intel/sgxsdk/bin/Enclave_private.pem 3072
+sudo chmod 666 /opt/intel/sgxsdk/bin/Enclave_private.pem 
 ```
 
 ## Overview
@@ -176,4 +182,11 @@ We will now explore:
 - **Kernel Module:** `isgx` is loaded and in use by `aesm_service`
 
 ---
----
+## EthSignerEnclave
+```
+Based: https://github.com/digawp/hello-enclave
+
+cd EthSignerEnclave
+make clean
+make
+```
