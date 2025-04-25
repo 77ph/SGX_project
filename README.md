@@ -89,6 +89,7 @@ Verify that Intel SGX SDK and driver are working correctly by building and runni
 
 5. **Alternative build**
 ```
+based: https://medium.com/@hasiniwitharana/how-to-set-up-intel-sgx-21227c4ea200
 cd linux-sgx
 sudo apt-get install build-essential ocaml ocamlbuild automake autoconf libtool wget python-is-python3 libssl-dev git cmake perl
 make preparation
