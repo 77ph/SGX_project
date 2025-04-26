@@ -1,53 +1,63 @@
-#include <stdio.h>
 #include <iostream>
+#include <iomanip>
+#include <cstring>
+#include <sgx_urts.h>
 #include "Enclave_u.h"
-#include "sgx_urts.h"
-#include "sgx_utils/sgx_utils.h"
 
-/* Global EID shared by multiple threads */
 sgx_enclave_id_t global_eid = 0;
 
-// OCall implementations
-void ocall_print(const char* str) {
-    printf("%s\n", str);
+void print_hex(const uint8_t* data, size_t len) {
+    for (size_t i = 0; i < len; i++) {
+        std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)data[i];
+    }
+    std::cout << std::dec << std::endl;
 }
 
-int main(int argc, char const *argv[]) {
-    if (initialize_enclave(&global_eid, "enclave.token", "enclave.signed.so") < 0) {
-        std::cout << "Fail to initialize enclave." << std::endl;
-        return 1;
-    }
-    int ptr;
-    sgx_status_t status = generate_random_number(global_eid, &ptr);
-    std::cout << status << std::endl;
-    if (status != SGX_SUCCESS) {
-        std::cout << "noob" << std::endl;
-    }
-    printf("Random number: %d\n", ptr);
+int main() {
+    sgx_status_t ret = SGX_ERROR_UNEXPECTED;
+    sgx_status_t ecall_status = SGX_ERROR_UNEXPECTED; // <=== добавляем такую переменную
 
-    // Seal the random number
-    size_t sealed_size = sizeof(sgx_sealed_data_t) + sizeof(ptr);
-    uint8_t* sealed_data = (uint8_t*)malloc(sealed_size);
-
-    sgx_status_t ecall_status;
-    status = seal(global_eid, &ecall_status,
-            (uint8_t*)&ptr, sizeof(ptr),
-            (sgx_sealed_data_t*)sealed_data, sealed_size);
-
-    if (!is_ecall_successful(status, "Sealing failed :(", ecall_status)) {
+    // Создание enclave
+    ret = sgx_create_enclave("enclave.signed.so", SGX_DEBUG_FLAG, NULL, NULL, &global_eid, NULL);
+    if (ret != SGX_SUCCESS) {
+        std::cerr << "Failed to create enclave: error code " << std::hex << ret << std::endl;
         return 1;
     }
 
-    int unsealed;
-    status = unseal(global_eid, &ecall_status,
-            (sgx_sealed_data_t*)sealed_data, sealed_size,
-            (uint8_t*)&unsealed, sizeof(unsealed));
+    uint8_t private_key[32] = {0};
+    uint8_t public_key[65] = {0};
 
-    if (!is_ecall_successful(status, "Unsealing failed :(", ecall_status)) {
+    // Генерация ключей
+    ret = ecall_generate_key(global_eid, &ecall_status, private_key, public_key);  // <=== передаем &ecall_status
+    if (ret != SGX_SUCCESS || ecall_status != SGX_SUCCESS) {
+        std::cerr << "Failed to generate key: error code " << std::hex << ret << " enclave status " << ecall_status << std::endl;
         return 1;
     }
 
-    std::cout << "Seal round trip success! Receive back " << unsealed << std::endl;
+    std::cout << "Private key:" << std::endl;
+    print_hex(private_key, 32);
+    std::cout << "Public key:" << std::endl;
+    print_hex(public_key, 65);
 
+    // Генерация тестового сообщения для подписи
+    uint8_t message_hash[32] = {0};
+    for (int i = 0; i < 32; i++) {
+        message_hash[i] = i;
+    }
+
+    uint8_t signature[64] = {0};
+
+    // Подпись сообщения
+    ret = ecall_sign_message(global_eid, &ecall_status, message_hash, signature);  // <=== тоже передаем &ecall_status
+    if (ret != SGX_SUCCESS || ecall_status != SGX_SUCCESS) {
+        std::cerr << "Failed to sign message: error code " << std::hex << ret << " enclave status " << ecall_status << std::endl;
+        return 1;
+    }
+
+    std::cout << "Signature:" << std::endl;
+    print_hex(signature, 64);
+
+    sgx_destroy_enclave(global_eid);
     return 0;
 }
+

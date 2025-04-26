@@ -1,4 +1,5 @@
 #include "Enclave_t.h"  // Автоматически сгенерирован sgx_edger8r
+#include <sgx_trts.h>
 #include <secp256k1.h>
 #include <secp256k1_recovery.h>
 
