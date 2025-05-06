@@ -1,6 +1,16 @@
 enclave {
     trusted {
-        public sgx_status_t ecall_generate_key([out, size=32] uint8_t* private_key, [out, size=65] uint8_t* public_key);
-        public sgx_status_t ecall_sign_message([in, size=32] const uint8_t* msg_hash, [out, size=64] uint8_t* signature);
+        // Генерация нового приватного ключа
+        public sgx_status_t ecall_generate_private_key();
+
+        // Подпись транзакции
+        public sgx_status_t ecall_sign_transaction(uint64_t nonce,
+                                                 uint64_t gas_price,
+                                                 uint64_t gas_limit,
+                                                 [in, size=20] uint8_t* to,
+                                                 uint64_t value,
+                                                 [in, size=data_len] uint8_t* data,
+                                                 size_t data_len,
+                                                 [out, size=65] uint8_t* signature);
     };
 };

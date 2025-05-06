@@ -23,16 +23,17 @@ App_Link_Flags := -m64 -L$(SGX_LIBRARY_PATH) -lsgx_urts -lsgx_uae_service -lpthr
 App_Name := app
 
 # Enclave settings
-Enclave_Cpp_Files := Enclave/Enclave.cpp Enclave/Sealing/Sealing.cpp Enclave/sgx_metadata.cpp
-Enclave_Include_Paths := -IEnclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/tlibc -I$(SGX_SDK)/include/stlport -I/usr/local/include
+Enclave_Cpp_Files := Enclave/Enclave.cpp Enclave/sgx_metadata.cpp
+Enclave_Include_Paths := -IEnclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/tlibc -I$(SGX_SDK)/include/stlport -Ilib/secp256k1/include
 Enclave_Cpp_Objects := $(Enclave_Cpp_Files:.cpp=.o)
-Enclave_C_Flags := -m64 -O2 -fpie -fstack-protector-strong -nostdinc -IEnclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/tlibc -I$(SGX_SDK)/include/stlport -I/usr/local/include -fvisibility=default -ffunction-sections -fdata-sections
+Enclave_C_Flags := -m64 -O2 -fpie -fstack-protector-strong -nostdinc -IEnclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/tlibc -I$(SGX_SDK)/include/stlport -Ilib/secp256k1/include -fvisibility=default -ffunction-sections -fdata-sections
 Enclave_Cpp_Flags := $(Enclave_C_Flags) -std=c++11 -nostdinc++ -fvisibility=default
-Enclave_Link_Flags := -Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfiles -L$(SGX_LIBRARY_PATH) -L$(SGX_EXTRA_LIB_PATH) \
+Enclave_Link_Flags := -Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfiles -L$(SGX_LIBRARY_PATH) \
     -Wl,--whole-archive -lsgx_trts -Wl,--no-whole-archive \
-    -Wl,--start-group -lsgx_tstdc -lsgx_tcxx -lsgx_tservice -lsgx_tcrypto -lsecp256k1 -Wl,--end-group \
+    -Wl,--start-group -lsgx_tstdc -lsgx_tcxx -lsgx_tservice -lsgx_tcrypto -Wl,--end-group \
     -Wl,-Bstatic -Wl,-Bsymbolic -Wl,--no-undefined -Wl,-pie,-eenclave_entry -Wl,--defsym,__ImageBase=0 -Wl,--gc-sections \
-    -Wl,--export-dynamic -Wl,--version-script=Enclave/Enclave.lds
+    -Wl,--export-dynamic -Wl,--version-script=Enclave/Enclave.lds \
+    -Llib/secp256k1 -l:libsecp256k1.a
 
 Enclave_Name := enclave.so
 Signed_Enclave_Name := enclave.signed.so

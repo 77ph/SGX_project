@@ -15,7 +15,7 @@ void print_hex(const uint8_t* data, size_t len) {
 
 int main() {
     sgx_status_t ret = SGX_ERROR_UNEXPECTED;
-    sgx_status_t ecall_status = SGX_ERROR_UNEXPECTED; // <=== добавляем такую переменную
+    sgx_status_t ecall_status = SGX_ERROR_UNEXPECTED;
 
     // Создание enclave
     ret = sgx_create_enclave("enclave.signed.so", SGX_DEBUG_FLAG, NULL, NULL, &global_eid, NULL);
@@ -24,40 +24,36 @@ int main() {
         return 1;
     }
 
-    uint8_t private_key[32] = {0};
-    uint8_t public_key[65] = {0};
-
-    // Генерация ключей
-    ret = ecall_generate_key(global_eid, &ecall_status, private_key, public_key);  // <=== передаем &ecall_status
+    // Генерация приватного ключа
+    ret = ecall_generate_private_key(global_eid, &ecall_status);
     if (ret != SGX_SUCCESS || ecall_status != SGX_SUCCESS) {
-        std::cerr << "Failed to generate key: error code " << std::hex << ret << " enclave status " << ecall_status << std::endl;
+        std::cerr << "Failed to generate private key: error code " << std::hex << ret << " enclave status " << ecall_status << std::endl;
         return 1;
     }
 
-    std::cout << "Private key:" << std::endl;
-    print_hex(private_key, 32);
-    std::cout << "Public key:" << std::endl;
-    print_hex(public_key, 65);
+    // Подготовка тестовой транзакции
+    uint64_t nonce = 1;
+    uint64_t gas_price = 20000000000;  // 20 Gwei
+    uint64_t gas_limit = 21000;
+    uint8_t to[20] = {0};  // Тестовый адрес получателя
+    uint64_t value = 1000000000000000000;  // 1 ETH
+    uint8_t* data = nullptr;  // Пустые данные
+    size_t data_len = 0;
+    uint8_t signature[65] = {0};  // Подпись (r, s, v)
 
-    // Генерация тестового сообщения для подписи
-    uint8_t message_hash[32] = {0};
-    for (int i = 0; i < 32; i++) {
-        message_hash[i] = i;
-    }
-
-    uint8_t signature[64] = {0};
-
-    // Подпись сообщения
-    ret = ecall_sign_message(global_eid, &ecall_status, message_hash, signature);  // <=== тоже передаем &ecall_status
+    // Подпись транзакции
+    ret = ecall_sign_transaction(global_eid, &ecall_status,
+                               nonce, gas_price, gas_limit,
+                               to, value, data, data_len,
+                               signature);
     if (ret != SGX_SUCCESS || ecall_status != SGX_SUCCESS) {
-        std::cerr << "Failed to sign message: error code " << std::hex << ret << " enclave status " << ecall_status << std::endl;
+        std::cerr << "Failed to sign transaction: error code " << std::hex << ret << " enclave status " << ecall_status << std::endl;
         return 1;
     }
 
-    std::cout << "Signature:" << std::endl;
-    print_hex(signature, 64);
+    std::cout << "Transaction signature:" << std::endl;
+    print_hex(signature, 65);
 
     sgx_destroy_enclave(global_eid);
     return 0;
 }
-

@@ -15,8 +15,8 @@
 extern "C" {
 #endif
 
-sgx_status_t ecall_generate_key(uint8_t* private_key, uint8_t* public_key);
-sgx_status_t ecall_sign_message(const uint8_t* msg_hash, uint8_t* signature);
+sgx_status_t ecall_generate_private_key(void);
+sgx_status_t ecall_sign_transaction(uint64_t nonce, uint64_t gas_price, uint64_t gas_limit, uint8_t* to, uint64_t value, uint8_t* data, size_t data_len, uint8_t* signature);
 
 
 #ifdef __cplusplus
