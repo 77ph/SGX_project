@@ -1,78 +1,43 @@
 #include "Enclave_u.h"
 #include <errno.h>
 
-typedef struct ms_generate_random_number_t {
-	int ms_retval;
-} ms_generate_random_number_t;
-
-typedef struct ms_seal_t {
+typedef struct ms_ecall_generate_key_t {
 	sgx_status_t ms_retval;
-	uint8_t* ms_plaintext;
-	size_t ms_plaintext_len;
-	sgx_sealed_data_t* ms_sealed_data;
-	size_t ms_sealed_size;
-} ms_seal_t;
+	uint8_t* ms_private_key;
+	uint8_t* ms_public_key;
+} ms_ecall_generate_key_t;
 
-typedef struct ms_unseal_t {
+typedef struct ms_ecall_sign_message_t {
 	sgx_status_t ms_retval;
-	sgx_sealed_data_t* ms_sealed_data;
-	size_t ms_sealed_size;
-	uint8_t* ms_plaintext;
-	uint32_t ms_plaintext_len;
-} ms_unseal_t;
-
-typedef struct ms_ocall_print_t {
-	const char* ms_str;
-} ms_ocall_print_t;
-
-static sgx_status_t SGX_CDECL Enclave_ocall_print(void* pms)
-{
-	ms_ocall_print_t* ms = SGX_CAST(ms_ocall_print_t*, pms);
-	ocall_print(ms->ms_str);
-
-	return SGX_SUCCESS;
-}
+	const uint8_t* ms_msg_hash;
+	uint8_t* ms_signature;
+} ms_ecall_sign_message_t;
 
 static const struct {
 	size_t nr_ocall;
 	void * table[1];
 } ocall_table_Enclave = {
-	1,
-	{
-		(void*)Enclave_ocall_print,
-	}
+	0,
+	{ NULL },
 };
-sgx_status_t generate_random_number(sgx_enclave_id_t eid, int* retval)
+sgx_status_t ecall_generate_key(sgx_enclave_id_t eid, sgx_status_t* retval, uint8_t* private_key, uint8_t* public_key)
 {
 	sgx_status_t status;
-	ms_generate_random_number_t ms;
+	ms_ecall_generate_key_t ms;
+	ms.ms_private_key = private_key;
+	ms.ms_public_key = public_key;
 	status = sgx_ecall(eid, 0, &ocall_table_Enclave, &ms);
 	if (status == SGX_SUCCESS && retval) *retval = ms.ms_retval;
 	return status;
 }
 
-sgx_status_t seal(sgx_enclave_id_t eid, sgx_status_t* retval, uint8_t* plaintext, size_t plaintext_len, sgx_sealed_data_t* sealed_data, size_t sealed_size)
+sgx_status_t ecall_sign_message(sgx_enclave_id_t eid, sgx_status_t* retval, const uint8_t* msg_hash, uint8_t* signature)
 {
 	sgx_status_t status;
-	ms_seal_t ms;
-	ms.ms_plaintext = plaintext;
-	ms.ms_plaintext_len = plaintext_len;
-	ms.ms_sealed_data = sealed_data;
-	ms.ms_sealed_size = sealed_size;
+	ms_ecall_sign_message_t ms;
+	ms.ms_msg_hash = msg_hash;
+	ms.ms_signature = signature;
 	status = sgx_ecall(eid, 1, &ocall_table_Enclave, &ms);
-	if (status == SGX_SUCCESS && retval) *retval = ms.ms_retval;
-	return status;
-}
-
-sgx_status_t unseal(sgx_enclave_id_t eid, sgx_status_t* retval, sgx_sealed_data_t* sealed_data, size_t sealed_size, uint8_t* plaintext, uint32_t plaintext_len)
-{
-	sgx_status_t status;
-	ms_unseal_t ms;
-	ms.ms_sealed_data = sealed_data;
-	ms.ms_sealed_size = sealed_size;
-	ms.ms_plaintext = plaintext;
-	ms.ms_plaintext_len = plaintext_len;
-	status = sgx_ecall(eid, 2, &ocall_table_Enclave, &ms);
 	if (status == SGX_SUCCESS && retval) *retval = ms.ms_retval;
 	return status;
 }
