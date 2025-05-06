@@ -1,0 +1,17 @@
+enclave_entry
+g_global_data
+g_global_data_sim
+g_peak_heap_used
+g_peak_rsrv_mem_committed
+sgx_ecall_generate_key
+sgx_ecall_sign_message
+ecall_generate_key
+ecall_sign_message
+sgx_ecall_table
+sgx_ocall_table
+g_dyn_entry_table
+g_ecall_table
+sgx_tstdc_version
+sgx_trts_version
+sgx_tservice_version
+sgx_tcrypto_version

@@ -2,6 +2,12 @@
 #define SGX_UTILS_H_
 
 #include <string>
+#include <sgx_urts.h>
+
+// Определяем флаг отладки в зависимости от конфигурации
+#ifndef SGX_DEBUG
+#define SGX_DEBUG 0
+#endif
 
 void print_error_message(sgx_status_t ret);
 

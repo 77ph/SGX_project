@@ -18,6 +18,11 @@ extern "C" {
 sgx_status_t ecall_generate_private_key(void);
 sgx_status_t ecall_sign_transaction(uint64_t nonce, uint64_t gas_price, uint64_t gas_limit, uint8_t* to, uint64_t value, uint8_t* data, size_t data_len, uint8_t* signature);
 
+sgx_status_t SGX_CDECL sgx_oc_cpuidex(int cpuinfo[4], int leaf, int subleaf);
+sgx_status_t SGX_CDECL sgx_thread_wait_untrusted_event_ocall(int* retval, const void* self);
+sgx_status_t SGX_CDECL sgx_thread_set_untrusted_event_ocall(int* retval, const void* waiter);
+sgx_status_t SGX_CDECL sgx_thread_setwait_untrusted_events_ocall(int* retval, const void* waiter, const void* self);
+sgx_status_t SGX_CDECL sgx_thread_set_multiple_untrusted_events_ocall(int* retval, const void** waiters, size_t total);
 
 #ifdef __cplusplus
 }

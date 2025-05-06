@@ -1,0 +1,19 @@
+enclave.so
+{
+    global:
+        g_global_data_sim;
+        g_global_data;
+        enclave_entry;
+        g_peak_heap_used;
+        g_peak_rsrv_mem_committed;
+        g_ecall_table;
+        g_dyn_entry_table;
+        sgx_tstdc_version;
+        sgx_trts_version;
+        sgx_tservice_version;
+        sgx_tcrypto_version;
+        ecall_generate_key;
+        ecall_sign_message;
+    local:
+        *;
+}; 

@@ -1,9 +1,11 @@
 #include "Enclave_t.h"  // Автоматически сгенерирован sgx_edger8r
 #include <sgx_trts.h>
+#include <sgx_tcrypto.h>
 #include <secp256k1.h>
 #include <secp256k1_recovery.h>
 #include <string.h>
 
+// Инициализация глобальных переменных
 static secp256k1_context* ctx = nullptr;
 static uint8_t current_private_key[32] = {0};
 static bool key_generated = false;
@@ -11,18 +13,35 @@ static bool key_generated = false;
 // Инициализация контекста secp256k1
 static bool init_secp256k1() {
     if (ctx == nullptr) {
+        // Создаем контекст
         ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
-        return ctx != nullptr;
+        if (ctx == nullptr) {
+            return false;
+        }
+
+        // Проверяем, что контекст работает
+        uint8_t test_key[32] = {1};
+        secp256k1_pubkey pubkey;
+        if (!secp256k1_ec_pubkey_create(ctx, &pubkey, test_key)) {
+            secp256k1_context_destroy(ctx);
+            ctx = nullptr;
+            return false;
+        }
     }
     return true;
 }
 
 // Генерация приватного ключа с проверкой на валидность
 static bool generate_valid_private_key(uint8_t* private_key) {
+    if (private_key == nullptr) {
+        return false;
+    }
+
     bool valid = false;
     while (!valid) {
         // Генерация случайного приватного ключа
-        if (sgx_read_rand(private_key, 32) != SGX_SUCCESS) {
+        sgx_status_t ret = sgx_read_rand(private_key, 32);
+        if (ret != SGX_SUCCESS) {
             return false;
         }
 
@@ -91,6 +110,10 @@ sgx_status_t ecall_sign_transaction(uint64_t nonce,
         return SGX_ERROR_UNEXPECTED;
     }
 
+    if (to == nullptr || signature == nullptr) {
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+
     // Создание хеша транзакции (здесь нужно реализовать RLP кодирование и Keccak-256)
     // TODO: Реализовать RLP кодирование и хеширование
     uint8_t tx_hash[32] = {0};  // Временный заглушка
@@ -106,6 +129,9 @@ sgx_status_t ecall_sign_transaction(uint64_t nonce,
     if (!secp256k1_ecdsa_recoverable_signature_serialize_compact(ctx, signature, &recid, &sig)) {
         return SGX_ERROR_UNEXPECTED;
     }
+
+    // Сохраняем recid в последнем байте подписи
+    signature[64] = (uint8_t)recid;
 
     return SGX_SUCCESS;
 }

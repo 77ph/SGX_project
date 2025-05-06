@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="UTF-8" ?>
 <!-- Please refer to User's Guide for the explanation of each field -->
 <EnclaveConfiguration>
   <ProdID>0</ProdID>
@@ -7,6 +8,6 @@
   <TCSNum>10</TCSNum>
   <TCSPolicy>1</TCSPolicy>
   <DisableDebug>0</DisableDebug>
-  <MiscSelect>1</MiscSelect>
-  <MiscMask>0</MiscMask>
+  <MiscSelect>0</MiscSelect>
+  <MiscMask>0xFFFFFFFF</MiscMask>
 </EnclaveConfiguration>

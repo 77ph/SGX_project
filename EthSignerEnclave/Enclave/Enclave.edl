@@ -1,4 +1,6 @@
 enclave {
+    from "sgx_tstdc.edl" import *;
+
     trusted {
         // Генерация нового приватного ключа
         public sgx_status_t ecall_generate_private_key();

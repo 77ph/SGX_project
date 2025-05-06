@@ -3,6 +3,12 @@ SGX_SDK ?= /opt/intel/sgxsdk
 SGX_MODE ?= HW
 SGX_ARCH ?= x64
 
+ifeq ($(SGX_MODE), HW)
+    SGX_DEBUG := 0
+else
+    SGX_DEBUG := 1
+endif
+
 ifeq ($(SGX_ARCH), x86)
     SGX_LIBRARY_PATH := $(SGX_SDK)/lib
     SGX_ENCLAVE_SIGNER := $(SGX_SDK)/bin/x86/sgx_sign
@@ -17,7 +23,7 @@ endif
 App_Cpp_Files := App/App.cpp App/sgx_utils/sgx_utils.cpp
 App_Include_Paths := -IApp -I$(SGX_SDK)/include
 App_Cpp_Objects := $(App_Cpp_Files:.cpp=.o)
-App_C_Flags := -m64 -O2 -fPIC -Wno-attributes $(App_Include_Paths)
+App_C_Flags := -m64 -O2 -fPIC -Wno-attributes $(App_Include_Paths) -DSGX_DEBUG=$(SGX_DEBUG)
 App_Cpp_Flags := $(App_C_Flags) -std=c++11
 App_Link_Flags := -m64 -L$(SGX_LIBRARY_PATH) -lsgx_urts -lsgx_uae_service -lpthread
 App_Name := app
@@ -58,11 +64,11 @@ App/%.o: App/%.cpp
 	@echo "CXX  <=  $<"
 
 App/Enclave_u.c: $(SGX_EDGER8R) Enclave/Enclave.edl
-	cd App && $(SGX_EDGER8R) --untrusted ../Enclave/Enclave.edl --search-path ../Enclave --search-path $(SGX_SDK)/include
+	@cd App && $(SGX_EDGER8R) --untrusted ../Enclave/Enclave.edl --search-path ../Enclave --search-path $(SGX_SDK)/include
 	@echo "GEN  =>  $@"
 
 $(Signed_Enclave_Name): $(Enclave_Name)
-	$(SGX_ENCLAVE_SIGNER) sign -key $(Enclave_Private_Key) -enclave $(Enclave_Name) -out $@ -config $(Enclave_Config_File)
+	$(SGX_ENCLAVE_SIGNER) sign -key $(Enclave_Private_Key) -enclave $(Enclave_Name) -out $@ -config $(Enclave_Config_File) -ignore-rel-error -ignore-init-sec-error
 	@echo "SIGN =>  $@"
 
 $(Enclave_Name): Enclave/Enclave_t.o $(Enclave_Cpp_Objects)
@@ -78,7 +84,7 @@ Enclave/%.o: Enclave/%.cpp
 	@echo "CXX  <=  $<"
 
 Enclave/Enclave_t.c: $(SGX_EDGER8R) Enclave/Enclave.edl
-	cd Enclave && $(SGX_EDGER8R) --trusted ../Enclave/Enclave.edl --search-path ../Enclave --search-path $(SGX_SDK)/include
+	@cd Enclave && $(SGX_EDGER8R) --trusted ../Enclave/Enclave.edl --search-path ../Enclave --search-path $(SGX_SDK)/include
 	@echo "GEN  =>  $@"
 
 clean:
