@@ -5,8 +5,9 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <secp256k1.h>
 
-#define ENCLAVE_BUFSIZ 2048
+#define ENCLAVE_BUFSIZ 1024
 
 /* 
  * enclave_printf: 
@@ -20,66 +21,79 @@ int enclave_printf(const char* fmt, ...)
     vsnprintf(buf, ENCLAVE_BUFSIZ, fmt, ap);
     va_end(ap);
     ocall_print(buf);
-    return (int)strnlen(buf, ENCLAVE_BUFSIZ - 1) + 1;
+    return 0;
 }
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Простая функция для проверки работы энклава
-void ecall_test_function(int* retval) {
-    enclave_printf("Test function called\n");
-    *retval = 42;
+int ecall_test_function(void) {
+    enclave_printf("Hello from enclave!\n");
+    return 42;
 }
 
 // Упрощенная версия генерации ключа
-void ecall_generate_private_key(int* retval, uint8_t* private_key, size_t key_size) {
-    enclave_printf("Starting key generation...\n");
-    
-    if (!private_key || key_size != 32) {
-        enclave_printf("Invalid parameters: private_key=%p, key_size=%zu\n", (void*)private_key, key_size);
-        *retval = -1;
-        return;
+int ecall_generate_private_key(uint8_t* private_key, size_t private_key_size) {
+    if (private_key == NULL || private_key_size != 32) {
+        return -1;
     }
 
-    // Use a local buffer first
-    uint8_t temp_key[32] = {0};
-    enclave_printf("Created temporary buffer\n");
-
-    // Generate random data
-    sgx_status_t status = sgx_read_rand(temp_key, sizeof(temp_key));
-    if (status != SGX_SUCCESS) {
-        enclave_printf("Failed to generate random data: %d\n", status);
-        *retval = -1;
-        return;
+    // Generate random private key
+    if (sgx_read_rand(private_key, 32) != SGX_SUCCESS) {
+        return -1;
     }
-    enclave_printf("Generated random data successfully\n");
 
-    // Copy to output buffer
-    memcpy(private_key, temp_key, sizeof(temp_key));
-    enclave_printf("Copied data to output buffer\n");
-
-    // Verify the copy
-    if (memcmp(private_key, temp_key, sizeof(temp_key)) != 0) {
-        enclave_printf("Data verification failed\n");
-        *retval = -1;
-        return;
+    // Create secp256k1 context
+    secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
+    if (ctx == NULL) {
+        return -1;
     }
-    enclave_printf("Data verification successful\n");
 
-    enclave_printf("Key generation completed successfully\n");
-    *retval = 0;
+    // Verify the private key
+    if (!secp256k1_ec_seckey_verify(ctx, private_key)) {
+        secp256k1_context_destroy(ctx);
+        return -1;
+    }
+
+    secp256k1_context_destroy(ctx);
+    return 0;
 }
 
 // Упрощенная версия подписи
-void ecall_sign_transaction(int* retval, const uint8_t* transaction_hash, size_t hash_size,
-                          uint8_t* signature, size_t sig_size) {
-    if (!transaction_hash || !signature || hash_size != 32 || sig_size != 64) {
-        *retval = -1;
-        return;
+int ecall_sign_transaction(const uint8_t* tx_hash, size_t tx_hash_size,
+                         const uint8_t* private_key, size_t private_key_size,
+                         uint8_t* signature, size_t signature_size) {
+    if (tx_hash == NULL || tx_hash_size != 32 ||
+        private_key == NULL || private_key_size != 32 ||
+        signature == NULL || signature_size != 64) {
+        return -1;
     }
 
-    // For demonstration, we'll just copy the hash to the signature
-    // In a real implementation, this would use proper cryptographic signing
-    memcpy(signature, transaction_hash, 32);
-    memcpy(signature + 32, transaction_hash, 32);
+    // Create secp256k1 context
+    secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
+    if (ctx == NULL) {
+        return -1;
+    }
 
-    *retval = 0;
+    // Create signature
+    secp256k1_ecdsa_signature sig;
+    if (!secp256k1_ecdsa_sign(ctx, &sig, tx_hash, private_key, NULL, NULL)) {
+        secp256k1_context_destroy(ctx);
+        return -1;
+    }
+
+    // Serialize signature
+    if (!secp256k1_ecdsa_signature_serialize_compact(ctx, signature, &sig)) {
+        secp256k1_context_destroy(ctx);
+        return -1;
+    }
+
+    secp256k1_context_destroy(ctx);
+    return 0;
 }
+
+#ifdef __cplusplus
+}
+#endif

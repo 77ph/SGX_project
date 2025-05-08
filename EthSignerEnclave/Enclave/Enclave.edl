@@ -3,22 +3,22 @@ enclave {
 
     trusted {
         // Простая тестовая функция
-        public void ecall_test_function([out] int* retval);
+        public int ecall_test_function();
 
         // Упрощенная генерация ключа
-        public void ecall_generate_private_key([out] int* retval,
-                                             [out, size=private_key_size] uint8_t* private_key,
-                                             size_t private_key_size);
+        public int ecall_generate_private_key([out, size=32] uint8_t* private_key,
+                                           size_t private_key_size);
 
         // Упрощенная подпись
-        public void ecall_sign_transaction([out] int* retval,
-                                         [in] const uint8_t* transaction_hash,
-                                         size_t hash_size,
-                                         [out] uint8_t* signature,
-                                         size_t signature_size);
+        public int ecall_sign_transaction([in, size=32] const uint8_t* tx_hash,
+                                      size_t tx_hash_size,
+                                      [in, size=32] const uint8_t* private_key,
+                                      size_t private_key_size,
+                                      [out, size=64] uint8_t* signature,
+                                      size_t signature_size);
     };
 
     untrusted {
-        void ocall_print([in, string] const char *str);
+        void ocall_print([in, string] const char* str);
     };
 };
