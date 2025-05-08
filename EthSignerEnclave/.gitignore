@@ -1,28 +1,32 @@
 # Build artifacts
 *.o
 *.so
-*.a
+*.signed.so
+*.token
 app
-enclave.signed.so
-enclave.so
-enclave.token
-enclave_patched.so
-.config_*
+
+# Generated files
+App/Enclave_u.*
+Enclave/Enclave_t.*
+
+# Temporary files
+*.lalptop
+*~
+
+# Backup directories
+backup_*/
+
+# IDE files
+.vscode/
+.idea/
+
+# System files
+.DS_Store
+Thumbs.db
 
 # SGX specific
 sgx-gdb
 Sealing.bak/
-
-# IDE and system files
-.vscode/
-.idea/
-*.swp
-*~
-
-# Temporary files
-*.bak
-history.txt
-install_sgx_history.txt
 
 # External directories
 linux-sgx/

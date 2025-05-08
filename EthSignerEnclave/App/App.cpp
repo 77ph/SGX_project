@@ -69,11 +69,27 @@ int main(int argc, char *argv[])
     /* Sign transaction */
     uint8_t tx_hash[32] = {0}; // Example transaction hash
     uint8_t signature[64];
+    
+    printf("Debug: Parameters before signing:\n");
+    printf("- tx_hash size: %zu\n", sizeof(tx_hash));
+    printf("- private_key size: %zu\n", sizeof(private_key));
+    printf("- signature size: %zu\n", sizeof(signature));
+    
+    // Print first few bytes of private key for verification
+    printf("Debug: First 4 bytes of private key: ");
+    for(int i = 0; i < 4; i++) {
+        printf("%02x ", private_key[i]);
+    }
+    printf("\n");
+    
     status = ecall_sign_transaction(global_eid, &retval, tx_hash, sizeof(tx_hash),
                                   private_key, sizeof(private_key),
                                   signature, sizeof(signature));
     if (status != SGX_SUCCESS || retval < 0) {
-        printf("Failed to sign transaction\n");
+        printf("Failed to sign transaction inside enclave: %d\n", retval);
+        if (status != SGX_SUCCESS) {
+            print_error_message(status);
+        }
         return -1;
     }
     printf("Transaction signed successfully\n");
