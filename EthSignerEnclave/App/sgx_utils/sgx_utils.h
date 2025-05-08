@@ -1,18 +1,18 @@
-#ifndef SGX_UTILS_H_
-#define SGX_UTILS_H_
+#ifndef _SGX_UTILS_H_
+#define _SGX_UTILS_H_
 
 #include <string>
-#include <sgx_urts.h>
+#include "sgx_urts.h"
 
-// Определяем флаг отладки в зависимости от конфигурации
-#ifndef SGX_DEBUG
-#define SGX_DEBUG 0
+#ifdef NDEBUG
+#define SGX_DEBUG_FLAG 0
+#else
+#define SGX_DEBUG_FLAG 1
 #endif
 
 void print_error_message(sgx_status_t ret);
-
+int check_sgx_device();
 int initialize_enclave(sgx_enclave_id_t* eid, const std::string& launch_token_path, const std::string& enclave_name);
+bool is_ecall_successful(sgx_status_t sgx_status, const std::string& err_msg, sgx_status_t ecall_return_value);
 
-bool is_ecall_successful(sgx_status_t sgx_status, const std::string& err_msg, sgx_status_t ecall_return_value = SGX_SUCCESS);
-
-#endif // SGX_UTILS_H_
+#endif // _SGX_UTILS_H_

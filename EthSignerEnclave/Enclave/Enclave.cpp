@@ -1,139 +1,99 @@
+#include "Enclave.h"
 #include "Enclave_t.h"  // Автоматически сгенерирован sgx_edger8r
 #include <sgx_trts.h>
 #include <sgx_tcrypto.h>
-#include <secp256k1.h>
-#include <secp256k1_recovery.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include <string.h>
+#include <secp256k1.h>
 
-// Инициализация глобальных переменных
-static secp256k1_context* ctx = nullptr;
-static uint8_t current_private_key[32] = {0};
-static bool key_generated = false;
+#define ENCLAVE_BUFSIZ 1024
 
-// Инициализация контекста secp256k1
-static bool init_secp256k1() {
-    if (ctx == nullptr) {
-        // Создаем контекст
-        ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
-        if (ctx == nullptr) {
-            return false;
-        }
-
-        // Проверяем, что контекст работает
-        uint8_t test_key[32] = {1};
-        secp256k1_pubkey pubkey;
-        if (!secp256k1_ec_pubkey_create(ctx, &pubkey, test_key)) {
-            secp256k1_context_destroy(ctx);
-            ctx = nullptr;
-            return false;
-        }
-    }
-    return true;
+/* 
+ * enclave_printf: 
+ *   Invokes OCALL to display the enclave buffer to the terminal.
+ */
+int enclave_printf(const char* fmt, ...)
+{
+    char buf[ENCLAVE_BUFSIZ] = { '\0' };
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, ENCLAVE_BUFSIZ, fmt, ap);
+    va_end(ap);
+    ocall_print(buf);
+    return 0;
 }
 
-// Генерация приватного ключа с проверкой на валидность
-static bool generate_valid_private_key(uint8_t* private_key) {
-    if (private_key == nullptr) {
-        return false;
-    }
-
-    bool valid = false;
-    while (!valid) {
-        // Генерация случайного приватного ключа
-        sgx_status_t ret = sgx_read_rand(private_key, 32);
-        if (ret != SGX_SUCCESS) {
-            return false;
-        }
-
-        // Проверка, что ключ не равен нулю
-        bool is_zero = true;
-        for (int i = 0; i < 32; i++) {
-            if (private_key[i] != 0) {
-                is_zero = false;
-                break;
-            }
-        }
-        if (is_zero) continue;
-
-        // Проверка, что ключ меньше порядка кривой
-        const uint8_t curve_order[] = {
-            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE,
-            0xBA, 0xAE, 0xDC, 0xE6, 0xAF, 0x48, 0xA0, 0x3B,
-            0xBF, 0xD2, 0x5E, 0x8C, 0xD0, 0x36, 0x41, 0x41
-        };
-
-        // Сравнение ключа с порядком кривой
-        int cmp = 0;
-        for (int i = 0; i < 32; i++) {
-            if (private_key[i] < curve_order[i]) {
-                cmp = -1;
-                break;
-            } else if (private_key[i] > curve_order[i]) {
-                cmp = 1;
-                break;
-            }
-        }
-        if (cmp < 0) {
-            valid = true;
-        }
-    }
-    return true;
-}
-
-// Определяем функции явно, без использования автоматически сгенерированных
+#ifdef __cplusplus
 extern "C" {
+#endif
 
-sgx_status_t ecall_generate_private_key() {
-    if (!init_secp256k1()) {
-        return SGX_ERROR_UNEXPECTED;
-    }
-
-    // Генерация валидного приватного ключа
-    if (!generate_valid_private_key(current_private_key)) {
-        return SGX_ERROR_UNEXPECTED;
-    }
-
-    key_generated = true;
-    return SGX_SUCCESS;
+// Простая функция для проверки работы энклава
+int ecall_test_function(void) {
+    enclave_printf("Hello from enclave!\n");
+    return 42;
 }
 
-sgx_status_t ecall_sign_transaction(uint64_t nonce,
-                                  uint64_t gas_price,
-                                  uint64_t gas_limit,
-                                  uint8_t* to,
-                                  uint64_t value,
-                                  uint8_t* data,
-                                  size_t data_len,
-                                  uint8_t* signature) {
-    if (!init_secp256k1() || !key_generated) {
-        return SGX_ERROR_UNEXPECTED;
+// Упрощенная версия генерации ключа
+int ecall_generate_private_key(uint8_t* private_key, size_t private_key_size) {
+    if (private_key == NULL || private_key_size != 32) {
+        return -1;
     }
 
-    if (to == nullptr || signature == nullptr) {
-        return SGX_ERROR_INVALID_PARAMETER;
+    // Generate random private key
+    if (sgx_read_rand(private_key, 32) != SGX_SUCCESS) {
+        return -1;
     }
 
-    // Создание хеша транзакции (здесь нужно реализовать RLP кодирование и Keccak-256)
-    // TODO: Реализовать RLP кодирование и хеширование
-    uint8_t tx_hash[32] = {0};  // Временный заглушка
-
-    // Создание подписи
-    secp256k1_ecdsa_recoverable_signature sig;
-    if (!secp256k1_ecdsa_sign_recoverable(ctx, &sig, tx_hash, current_private_key, NULL, NULL)) {
-        return SGX_ERROR_UNEXPECTED;
+    // Create secp256k1 context
+    secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
+    if (ctx == NULL) {
+        return -1;
     }
 
-    // Сериализация подписи
-    int recid;
-    if (!secp256k1_ecdsa_recoverable_signature_serialize_compact(ctx, signature, &recid, &sig)) {
-        return SGX_ERROR_UNEXPECTED;
+    // Verify the private key
+    if (!secp256k1_ec_seckey_verify(ctx, private_key)) {
+        secp256k1_context_destroy(ctx);
+        return -1;
     }
 
-    // Сохраняем recid в последнем байте подписи
-    signature[64] = (uint8_t)recid;
-
-    return SGX_SUCCESS;
+    secp256k1_context_destroy(ctx);
+    return 0;
 }
 
-} // extern "C"
+// Упрощенная версия подписи
+int ecall_sign_transaction(const uint8_t* tx_hash, size_t tx_hash_size,
+                         const uint8_t* private_key, size_t private_key_size,
+                         uint8_t* signature, size_t signature_size) {
+    if (tx_hash == NULL || tx_hash_size != 32 ||
+        private_key == NULL || private_key_size != 32 ||
+        signature == NULL || signature_size != 64) {
+        return -1;
+    }
+
+    // Create secp256k1 context
+    secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
+    if (ctx == NULL) {
+        return -1;
+    }
+
+    // Create signature
+    secp256k1_ecdsa_signature sig;
+    if (!secp256k1_ecdsa_sign(ctx, &sig, tx_hash, private_key, NULL, NULL)) {
+        secp256k1_context_destroy(ctx);
+        return -1;
+    }
+
+    // Serialize signature
+    if (!secp256k1_ecdsa_signature_serialize_compact(ctx, signature, &sig)) {
+        secp256k1_context_destroy(ctx);
+        return -1;
+    }
+
+    secp256k1_context_destroy(ctx);
+    return 0;
+}
+
+#ifdef __cplusplus
+}
+#endif

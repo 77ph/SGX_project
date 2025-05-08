@@ -1,21 +1,27 @@
 #include "Enclave_u.h"
 #include <errno.h>
 
+typedef struct ms_ecall_test_function_t {
+	int* ms_retval;
+} ms_ecall_test_function_t;
+
 typedef struct ms_ecall_generate_private_key_t {
-	sgx_status_t ms_retval;
+	int* ms_retval;
+	uint8_t* ms_private_key;
+	size_t ms_private_key_size;
 } ms_ecall_generate_private_key_t;
 
 typedef struct ms_ecall_sign_transaction_t {
-	sgx_status_t ms_retval;
-	uint64_t ms_nonce;
-	uint64_t ms_gas_price;
-	uint64_t ms_gas_limit;
-	uint8_t* ms_to;
-	uint64_t ms_value;
-	uint8_t* ms_data;
-	size_t ms_data_len;
+	int* ms_retval;
+	const uint8_t* ms_transaction_hash;
+	size_t ms_hash_size;
 	uint8_t* ms_signature;
+	size_t ms_signature_size;
 } ms_ecall_sign_transaction_t;
+
+typedef struct ms_ocall_print_t {
+	const char* ms_str;
+} ms_ocall_print_t;
 
 typedef struct ms_sgx_oc_cpuidex_t {
 	int* ms_cpuinfo;
@@ -44,6 +50,14 @@ typedef struct ms_sgx_thread_set_multiple_untrusted_events_ocall_t {
 	const void** ms_waiters;
 	size_t ms_total;
 } ms_sgx_thread_set_multiple_untrusted_events_ocall_t;
+
+static sgx_status_t SGX_CDECL Enclave_ocall_print(void* pms)
+{
+	ms_ocall_print_t* ms = SGX_CAST(ms_ocall_print_t*, pms);
+	ocall_print(ms->ms_str);
+
+	return SGX_SUCCESS;
+}
 
 static sgx_status_t SGX_CDECL Enclave_sgx_oc_cpuidex(void* pms)
 {
@@ -87,10 +101,11 @@ static sgx_status_t SGX_CDECL Enclave_sgx_thread_set_multiple_untrusted_events_o
 
 static const struct {
 	size_t nr_ocall;
-	void * table[5];
+	void * table[6];
 } ocall_table_Enclave = {
-	5,
+	6,
 	{
+		(void*)Enclave_ocall_print,
 		(void*)Enclave_sgx_oc_cpuidex,
 		(void*)Enclave_sgx_thread_wait_untrusted_event_ocall,
 		(void*)Enclave_sgx_thread_set_untrusted_event_ocall,
@@ -98,29 +113,36 @@ static const struct {
 		(void*)Enclave_sgx_thread_set_multiple_untrusted_events_ocall,
 	}
 };
-sgx_status_t ecall_generate_private_key(sgx_enclave_id_t eid, sgx_status_t* retval)
+sgx_status_t ecall_test_function(sgx_enclave_id_t eid, int* retval)
 {
 	sgx_status_t status;
-	ms_ecall_generate_private_key_t ms;
+	ms_ecall_test_function_t ms;
+	ms.ms_retval = retval;
 	status = sgx_ecall(eid, 0, &ocall_table_Enclave, &ms);
-	if (status == SGX_SUCCESS && retval) *retval = ms.ms_retval;
 	return status;
 }
 
-sgx_status_t ecall_sign_transaction(sgx_enclave_id_t eid, sgx_status_t* retval, uint64_t nonce, uint64_t gas_price, uint64_t gas_limit, uint8_t* to, uint64_t value, uint8_t* data, size_t data_len, uint8_t* signature)
+sgx_status_t ecall_generate_private_key(sgx_enclave_id_t eid, int* retval, uint8_t* private_key, size_t private_key_size)
+{
+	sgx_status_t status;
+	ms_ecall_generate_private_key_t ms;
+	ms.ms_retval = retval;
+	ms.ms_private_key = private_key;
+	ms.ms_private_key_size = private_key_size;
+	status = sgx_ecall(eid, 1, &ocall_table_Enclave, &ms);
+	return status;
+}
+
+sgx_status_t ecall_sign_transaction(sgx_enclave_id_t eid, int* retval, const uint8_t* transaction_hash, size_t hash_size, uint8_t* signature, size_t signature_size)
 {
 	sgx_status_t status;
 	ms_ecall_sign_transaction_t ms;
-	ms.ms_nonce = nonce;
-	ms.ms_gas_price = gas_price;
-	ms.ms_gas_limit = gas_limit;
-	ms.ms_to = to;
-	ms.ms_value = value;
-	ms.ms_data = data;
-	ms.ms_data_len = data_len;
+	ms.ms_retval = retval;
+	ms.ms_transaction_hash = transaction_hash;
+	ms.ms_hash_size = hash_size;
 	ms.ms_signature = signature;
-	status = sgx_ecall(eid, 1, &ocall_table_Enclave, &ms);
-	if (status == SGX_SUCCESS && retval) *retval = ms.ms_retval;
+	ms.ms_signature_size = signature_size;
+	status = sgx_ecall(eid, 2, &ocall_table_Enclave, &ms);
 	return status;
 }
 
