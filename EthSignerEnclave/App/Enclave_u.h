@@ -16,6 +16,10 @@
 extern "C" {
 #endif
 
+#ifndef OCALL_PRINT_DEFINED__
+#define OCALL_PRINT_DEFINED__
+void SGX_UBRIDGE(SGX_NOCONVENTION, ocall_print, (const char* str));
+#endif
 #ifndef SGX_OC_CPUIDEX_DEFINED__
 #define SGX_OC_CPUIDEX_DEFINED__
 void SGX_UBRIDGE(SGX_CDECL, sgx_oc_cpuidex, (int cpuinfo[4], int leaf, int subleaf));
@@ -37,8 +41,9 @@ int SGX_UBRIDGE(SGX_CDECL, sgx_thread_setwait_untrusted_events_ocall, (const voi
 int SGX_UBRIDGE(SGX_CDECL, sgx_thread_set_multiple_untrusted_events_ocall, (const void** waiters, size_t total));
 #endif
 
-sgx_status_t ecall_generate_private_key(sgx_enclave_id_t eid, sgx_status_t* retval);
-sgx_status_t ecall_sign_transaction(sgx_enclave_id_t eid, sgx_status_t* retval, uint64_t nonce, uint64_t gas_price, uint64_t gas_limit, uint8_t* to, uint64_t value, uint8_t* data, size_t data_len, uint8_t* signature);
+sgx_status_t ecall_test_function(sgx_enclave_id_t eid, int* retval);
+sgx_status_t ecall_generate_private_key(sgx_enclave_id_t eid, int* retval, uint8_t* private_key, size_t private_key_size);
+sgx_status_t ecall_sign_transaction(sgx_enclave_id_t eid, int* retval, const uint8_t* transaction_hash, size_t hash_size, uint8_t* signature, size_t signature_size);
 
 #ifdef __cplusplus
 }

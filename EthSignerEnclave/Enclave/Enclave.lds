@@ -12,8 +12,9 @@ enclave.so
         sgx_trts_version;
         sgx_tservice_version;
         sgx_tcrypto_version;
-        ecall_generate_key;
-        ecall_sign_message;
+        ecall_test_function;
+        ecall_generate_private_key;
+        ecall_sign_transaction;
     local:
         *;
 }; 

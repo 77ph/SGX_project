@@ -2,17 +2,23 @@ enclave {
     from "sgx_tstdc.edl" import *;
 
     trusted {
-        // Генерация нового приватного ключа
-        public sgx_status_t ecall_generate_private_key();
+        // Простая тестовая функция
+        public void ecall_test_function([out] int* retval);
 
-        // Подпись транзакции
-        public sgx_status_t ecall_sign_transaction(uint64_t nonce,
-                                                 uint64_t gas_price,
-                                                 uint64_t gas_limit,
-                                                 [in, size=20] uint8_t* to,
-                                                 uint64_t value,
-                                                 [in, size=data_len] uint8_t* data,
-                                                 size_t data_len,
-                                                 [out, size=65] uint8_t* signature);
+        // Упрощенная генерация ключа
+        public void ecall_generate_private_key([out] int* retval,
+                                             [out, size=private_key_size] uint8_t* private_key,
+                                             size_t private_key_size);
+
+        // Упрощенная подпись
+        public void ecall_sign_transaction([out] int* retval,
+                                         [in] const uint8_t* transaction_hash,
+                                         size_t hash_size,
+                                         [out] uint8_t* signature,
+                                         size_t signature_size);
+    };
+
+    untrusted {
+        void ocall_print([in, string] const char *str);
     };
 };

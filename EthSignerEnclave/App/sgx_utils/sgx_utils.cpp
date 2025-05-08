@@ -17,7 +17,92 @@
 
 /* Check error conditions for loading enclave */
 void print_error_message(sgx_status_t ret) {
-    std::cerr << "SGX error code: 0x" << std::hex << ret << std::dec << std::endl;
+    std::cout << "Error: " << ret << std::endl;
+    switch(ret) {
+        case SGX_ERROR_UNEXPECTED:
+            std::cout << "Unexpected error occurred" << std::endl;
+            break;
+        case SGX_ERROR_INVALID_PARAMETER:
+            std::cout << "Invalid parameter" << std::endl;
+            break;
+        case SGX_ERROR_OUT_OF_MEMORY:
+            std::cout << "Out of memory" << std::endl;
+            break;
+        case SGX_ERROR_ENCLAVE_LOST:
+            std::cout << "Enclave lost" << std::endl;
+            break;
+        case SGX_ERROR_INVALID_ENCLAVE:
+            std::cout << "Invalid enclave" << std::endl;
+            break;
+        case SGX_ERROR_INVALID_ENCLAVE_ID:
+            std::cout << "Invalid enclave ID" << std::endl;
+            break;
+        case SGX_ERROR_INVALID_SIGNATURE:
+            std::cout << "Invalid signature" << std::endl;
+            break;
+        case SGX_ERROR_NDEBUG_ENCLAVE:
+            std::cout << "Enclave is not in debug mode" << std::endl;
+            break;
+        case SGX_ERROR_OUT_OF_EPC:
+            std::cout << "Out of EPC memory" << std::endl;
+            break;
+        case SGX_ERROR_NO_DEVICE:
+            std::cout << "SGX device not found" << std::endl;
+            break;
+        case SGX_ERROR_MEMORY_MAP_CONFLICT:
+            std::cout << "Memory map conflict" << std::endl;
+            break;
+        case SGX_ERROR_INVALID_METADATA:
+            std::cout << "Invalid metadata" << std::endl;
+            break;
+        case SGX_ERROR_DEVICE_BUSY:
+            std::cout << "SGX device is busy" << std::endl;
+            break;
+        case SGX_ERROR_INVALID_VERSION:
+            std::cout << "Invalid version" << std::endl;
+            break;
+        case SGX_ERROR_MODE_INCOMPATIBLE:
+            std::cout << "Mode incompatible" << std::endl;
+            break;
+        case SGX_ERROR_ENCLAVE_FILE_ACCESS:
+            std::cout << "Cannot access enclave file" << std::endl;
+            break;
+        case SGX_ERROR_INVALID_ATTRIBUTE:
+            std::cout << "Invalid attribute" << std::endl;
+            break;
+        default:
+            std::cout << "Unknown error" << std::endl;
+            break;
+    }
+}
+
+int check_sgx_device() {
+    std::cout << "Checking SGX device..." << std::endl;
+    
+#ifndef SGX_SIM
+    // Check if SGX device exists
+    if (access("/dev/isgx", F_OK) == -1) {
+        std::cout << "Error: SGX device not found" << std::endl;
+        return -1;
+    }
+    
+    // Check read permissions
+    if (access("/dev/isgx", R_OK) == -1) {
+        std::cout << "Error: No read permission for SGX device" << std::endl;
+        return -1;
+    }
+
+    // Check if we can open the device
+    int fd = open("/dev/isgx", O_RDONLY);
+    if (fd == -1) {
+        std::cout << "Error: Cannot open SGX device: " << strerror(errno) << std::endl;
+        return -1;
+    }
+    close(fd);
+#endif
+    
+    std::cout << "SGX device check passed" << std::endl;
+    return 0;
 }
 
 /* Initialize the enclave:
@@ -26,111 +111,110 @@ void print_error_message(sgx_status_t ret) {
  *   Step 3: save the launch token if it is updated
  */
 int initialize_enclave(sgx_enclave_id_t* eid, const std::string& launch_token_path, const std::string& enclave_name) {
-    std::cout << "Initializing enclave..." << std::endl;
-    std::cout << "Enclave path: " << enclave_name << std::endl;
-    std::cout << "Token path: " << launch_token_path << std::endl;
+    printf("Initializing enclave from: %s\n", enclave_name.c_str());
+    printf("Token path: %s\n", launch_token_path.c_str());
 
-    // Проверяем доступность устройств SGX
-    std::cout << "Checking SGX devices..." << std::endl;
+    // Check if SGX device is available (only in HW mode)
+#ifndef SGX_SIM
+    printf("Checking SGX device...\n");
     if (access("/dev/isgx", F_OK) == -1) {
-        std::cerr << "Error: SGX device not found" << std::endl;
+        printf("Error: SGX device not found\n");
         return -1;
     }
-    if (access("/dev/isgx", R_OK) == -1) {
-        std::cerr << "Error: No read permission for SGX device" << std::endl;
+    printf("SGX device check passed\n");
+#endif
+
+    // Open token file
+    printf("Opening token file...\n");
+    FILE* token_file = fopen(launch_token_path.c_str(), "rb");
+    if (token_file == NULL && (errno != ENOENT)) {
+        printf("Error: Could not open token file: %s\n", strerror(errno));
         return -1;
     }
 
-    const char* token_path = launch_token_path.c_str();
+    // Create launch token
+    printf("Creating launch token...\n");
     sgx_launch_token_t token = {0};
-    sgx_status_t ret = SGX_ERROR_UNEXPECTED;
-    int updated = 0;
-
-    /* Step 1: try to retrieve the launch token saved by last transaction
-     *         if there is no token, then create a new one.
-     */
-    /* try to get the token saved in $HOME */
-    std::cout << "Opening token file..." << std::endl;
-    FILE* fp = fopen(token_path, "rb");
-    if (fp == NULL && (fp = fopen(token_path, "wb")) == NULL) {
-        std::cerr << "Warning: Failed to create/open the launch token file \"" << token_path << "\"." << std::endl;
-    }
-
-    if (fp != NULL) {
-        /* read the token from saved file */
-        size_t read_num = fread(token, 1, sizeof(sgx_launch_token_t), fp);
+    int token_updated = 0;
+    if (token_file != NULL) {
+        size_t read_num = fread(token, 1, sizeof(sgx_launch_token_t), token_file);
         if (read_num != 0 && read_num != sizeof(sgx_launch_token_t)) {
-            /* if token is invalid, clear the buffer */
-            memset(&token, 0x0, sizeof(sgx_launch_token_t));
-            std::cerr << "Warning: Invalid launch token read from \"" << token_path << "\"." << std::endl;
+            printf("Error: Invalid token file\n");
+            fclose(token_file);
+            return -1;
         }
+        fclose(token_file);
     }
 
-    /* Step 2: call sgx_create_enclave to initialize an enclave instance */
-    std::cout << "Creating enclave..." << std::endl;
-    std::cout << "Debug flag: " << SGX_DEBUG << std::endl;
-    std::cout << "Token size: " << sizeof(sgx_launch_token_t) << std::endl;
-    std::cout << "Enclave name: " << enclave_name << std::endl;
+    // Create enclave
+    printf("Creating enclave...\n");
+    printf("Debug flag: %d\n", SGX_DEBUG_FLAG);
+    #ifdef NDEBUG
+        printf("NDEBUG is defined\n");
+    #else
+        printf("NDEBUG is not defined\n");
+    #endif
+    printf("Token size: %zu\n", sizeof(sgx_launch_token_t));
+    printf("Enclave name: %s\n", enclave_name.c_str());
 
-    // Проверяем существование файла энклава
+    // Check enclave file
     struct stat st;
-    if (stat(enclave_name.c_str(), &st) == -1) {
-        std::cerr << "Error: Enclave file not found: " << enclave_name << std::endl;
-        if (fp != NULL) fclose(fp);
-        return -1;
-    }
-    std::cout << "Enclave file size: " << st.st_size << " bytes" << std::endl;
-    std::cout << "Enclave file permissions: " << std::oct << (st.st_mode & 0777) << std::dec << std::endl;
-
-    // Проверяем права доступа к файлу энклава
-    if (access(enclave_name.c_str(), R_OK) == -1) {
-        std::cerr << "Error: No read permission for enclave file: " << enclave_name << std::endl;
-        if (fp != NULL) fclose(fp);
+    if (stat(enclave_name.c_str(), &st) == 0) {
+        printf("Enclave file size: %ld bytes\n", st.st_size);
+        printf("Enclave file permissions: %o\n", st.st_mode & 0777);
+    } else {
+        printf("Error: Could not stat enclave file: %s\n", strerror(errno));
         return -1;
     }
 
-    std::cout << "Calling sgx_create_enclave..." << std::endl;
-    ret = sgx_create_enclave(enclave_name.c_str(), SGX_DEBUG, &token, &updated, eid, NULL);
-    std::cout << "sgx_create_enclave returned: 0x" << std::hex << ret << std::dec << std::endl;
+    // Create enclave
+    printf("Calling sgx_create_enclave...\n");
+    printf("Debug flag: %d\n", SGX_DEBUG_FLAG);
+    printf("NDEBUG is %s\n", SGX_DEBUG_FLAG ? "not defined" : "defined");
+    printf("Token size: %zu\n", sizeof(sgx_launch_token_t));
+    printf("Enclave name: %s\n", enclave_name.c_str());
+    printf("Enclave file size: %ld bytes\n", (long)st.st_size);
+    printf("Enclave file permissions: %o\n", st.st_mode & 0777);
     
+    // Add more detailed error checking
+    printf("About to call sgx_create_enclave with parameters:\n");
+    printf("- enclave_name: %s\n", enclave_name.c_str());
+    printf("- debug: %d\n", SGX_DEBUG_FLAG);
+    printf("- token: %p\n", (void*)&token);
+    printf("- token_updated: %p\n", (void*)&token_updated);
+    printf("- eid: %p\n", (void*)eid);
+    
+    sgx_status_t ret = sgx_create_enclave(enclave_name.c_str(), SGX_DEBUG_FLAG, &token, &token_updated, eid, NULL);
+    
+    printf("sgx_create_enclave returned with status: %d\n", ret);
     if (ret != SGX_SUCCESS) {
-        std::cerr << "Failed to create enclave: ";
+        printf("Error: Failed to create enclave. Error code: %d\n", ret);
         print_error_message(ret);
-        if (fp != NULL) fclose(fp);
         return -1;
     }
 
-    std::cout << "Enclave created successfully with ID: " << std::hex << *eid << std::dec << std::endl;
-    std::cout << "Token updated: " << (updated ? "yes" : "no") << std::endl;
-
-    /* Step 3: save the launch token if it is updated */
-    if (updated == FALSE || fp == NULL) {
-        /* if the token is not updated, or file handler is invalid, do not perform saving */
-        if (fp != NULL) fclose(fp);
-        return 0;
+    // Save token
+    printf("Saving launch token...\n");
+    token_file = fopen(launch_token_path.c_str(), "wb");
+    if (token_file != NULL) {
+        fwrite(token, 1, sizeof(sgx_launch_token_t), token_file);
+        fclose(token_file);
     }
 
-    /* reopen the file with write capablity */
-    std::cout << "Saving updated token..." << std::endl;
-    fp = freopen(token_path, "wb", fp);
-    if (fp == NULL) return 0;
-    size_t write_num = fwrite(token, 1, sizeof(sgx_launch_token_t), fp);
-    if (write_num != sizeof(sgx_launch_token_t))
-        std::cerr << "Warning: Failed to save launch token to \"" << token_path << "\"." << std::endl;
-    fclose(fp);
+    printf("Enclave created successfully\n");
     return 0;
 }
 
 bool is_ecall_successful(sgx_status_t sgx_status, const std::string& err_msg,
         sgx_status_t ecall_return_value) {
     if (sgx_status != SGX_SUCCESS || ecall_return_value != SGX_SUCCESS) {
-        std::cerr << err_msg << std::endl;
+        std::cout << err_msg << std::endl;
         if (sgx_status != SGX_SUCCESS) {
-            std::cerr << "SGX error: ";
+            std::cout << "SGX error: ";
             print_error_message(sgx_status);
         }
         if (ecall_return_value != SGX_SUCCESS) {
-            std::cerr << "Enclave error: ";
+            std::cout << "Enclave error: ";
             print_error_message(ecall_return_value);
         }
         return false;

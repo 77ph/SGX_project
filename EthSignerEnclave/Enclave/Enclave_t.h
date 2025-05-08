@@ -15,9 +15,11 @@
 extern "C" {
 #endif
 
-sgx_status_t ecall_generate_private_key(void);
-sgx_status_t ecall_sign_transaction(uint64_t nonce, uint64_t gas_price, uint64_t gas_limit, uint8_t* to, uint64_t value, uint8_t* data, size_t data_len, uint8_t* signature);
+void ecall_test_function(int* retval);
+void ecall_generate_private_key(int* retval, uint8_t* private_key, size_t private_key_size);
+void ecall_sign_transaction(int* retval, const uint8_t* transaction_hash, size_t hash_size, uint8_t* signature, size_t signature_size);
 
+sgx_status_t SGX_CDECL ocall_print(const char* str);
 sgx_status_t SGX_CDECL sgx_oc_cpuidex(int cpuinfo[4], int leaf, int subleaf);
 sgx_status_t SGX_CDECL sgx_thread_wait_untrusted_event_ocall(int* retval, const void* self);
 sgx_status_t SGX_CDECL sgx_thread_set_untrusted_event_ocall(int* retval, const void* waiter);
