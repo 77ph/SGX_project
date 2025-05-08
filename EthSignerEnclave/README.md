@@ -1,23 +1,82 @@
-# Intel SGX "Hello World"
+# EthSignerEnclave
 
-This is meant to be a base template for an [Intel SGX](https://github.com/01org/linux-sgx/) application on Linux. Not sure if it is just me, but I feel the documentations on Intel SGX development on Linux is still sorely lacking. This meant to be a stub of a "Getting-started" tutorial.
-
-This template is based on the SampleEnclave app of the sample enclaves provided with the Intel SGX Linux [drivers](https://github.com/01org/linux-sgx-driver) and [SDK](https://github.com/01org/linux-sgx/).
+A secure Ethereum transaction signing implementation using Intel SGX enclaves. This project provides a secure environment for generating and managing Ethereum private keys and signing transactions within an Intel SGX enclave.
 
 ## Features
 
-- Sample code for doing `ECALL`
-- Sample code for doing `OCALL`
-- Sample code for sealing (can be taken out and patched into your enclave!)
+- Secure private key generation within SGX enclave
+- Transaction signing with secp256k1 implementation
+- Hardware-based security using Intel SGX
+- Support for both debug and release modes
+- Integration with Ethereum's secp256k1 library
 
-## TODO
+## Prerequisites
 
-- Tutorial explaining what each directory and file is used for.
+- Intel SGX SDK (tested with version 2.19)
+- Intel SGX PSW (Platform Software)
+- GCC/G++ compiler
+- Make build system
+- Linux operating system with SGX support
 
-- Write a getting started tutorial.
+## Building
 
-- Tutorial on treating `edl`s as static library (with the sealing functions as example)
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/EthSignerEnclave.git
+cd EthSignerEnclave
+```
 
-## Contribute
+2. Build the project:
+```bash
+# For debug mode
+make SGX_MODE=HW SGX_DEBUG=1
 
-Any help for the above TODOs or any general feedback will be much appreciated! Go ahead and submit those PRs in!
+# For release mode
+make SGX_MODE=HW
+```
+
+## Usage
+
+After building, you can run the application:
+```bash
+./app
+```
+
+The application will:
+1. Initialize the SGX enclave
+2. Generate a private key
+3. Sign a sample transaction
+4. Output the results
+
+## Project Structure
+
+- `App/` - Untrusted application code
+  - `App.cpp` - Main application entry point
+  - `App.h` - Application header
+  - `sgx_utils/` - SGX utility functions
+- `Enclave/` - Trusted enclave code
+  - `Enclave.cpp` - Enclave implementation
+  - `Enclave.h` - Enclave header
+  - `Enclave.edl` - Enclave Definition Language file
+- `lib/` - External libraries
+  - `secp256k1/` - Ethereum's secp256k1 implementation
+
+## Security Considerations
+
+- Private keys are generated and stored securely within the SGX enclave
+- All cryptographic operations are performed within the enclave
+- The enclave provides memory encryption and integrity protection
+- Debug mode should only be used for development
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Acknowledgments
+
+- Intel SGX SDK team
+- Ethereum Foundation for secp256k1 implementation 
