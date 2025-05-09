@@ -1,5 +1,6 @@
 enclave {
     from "sgx_tstdc.edl" import *;
+    from "sgx_tprotected_fs.edl" import *;
 
     trusted {
         // Простая тестовая функция
@@ -9,16 +10,62 @@ enclave {
         public int ecall_generate_private_key([out, size=32] uint8_t* private_key,
                                            size_t private_key_size);
 
-        // Упрощенная подпись
+        // Сохранение приватного ключа в энклаве
+        public int ecall_store_private_key([in, size=32] const uint8_t* private_key,
+                                        size_t private_key_size);
+
+        // Упрощенная подпись (без передачи приватного ключа)
         public int ecall_sign_transaction([in, size=32] const uint8_t* tx_hash,
                                       size_t tx_hash_size,
-                                      [in, size=32] const uint8_t* private_key,
-                                      size_t private_key_size,
                                       [out, size=64] uint8_t* signature,
                                       size_t signature_size);
+
+        // Новая функция для подписи с приватным ключом внутри энклава
+        public int ecall_sign_with_stored_key([in, size=tx_hash_size] const uint8_t* tx_hash,
+                                           size_t tx_hash_size,
+                                           [out, size=signature_size] uint8_t* signature,
+                                           size_t signature_size);
+
+        // Account management functions
+        public int ecall_generate_account();
+        public int ecall_save_account_state();
+        public int ecall_load_account_state();
+        public int ecall_sign_with_account([in, size=message_hash_len] const uint8_t* message_hash,
+                                         size_t message_hash_len,
+                                         [out, size=signature_len] uint8_t* signature,
+                                         size_t signature_len);
+
+        // Account pool management
+        public int ecall_init_account_pool();
+        public int ecall_load_account_to_pool([in, string] const char* account_id);
+        public int ecall_unload_account_from_pool([in, string] const char* account_id);
+        public int ecall_sign_with_pool_account([in, string] const char* account_id,
+                                             [in, size=message_hash_len] const uint8_t* message_hash,
+                                             size_t message_hash_len,
+                                             [out, size=signature_len] uint8_t* signature,
+                                             size_t signature_len);
+        public int ecall_get_pool_status([out] uint32_t* total_accounts,
+                                       [out] uint32_t* active_accounts);
+
+        // Test functions
+        public int ecall_save_test_account();
+
+        // Test functions
+        public int ecall_test_entropy([out, size=size] uint8_t* entropy, size_t size);
+        public int ecall_test_save_load();
+        public int ecall_test_sign_verify();
     };
 
     untrusted {
         void ocall_print([in, string] const char* str);
+        
+        // File operations
+        int ocall_save_to_file([in, size=size] const uint8_t* data,
+                             size_t size,
+                             [in, string] const char* filename);
+        
+        int ocall_read_from_file([out, size=size] uint8_t* data,
+                               size_t size,
+                               [in, string] const char* filename);
     };
 };

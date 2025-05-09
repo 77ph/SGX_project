@@ -1,4 +1,10 @@
-# SGX SDK settings
+# Компилятор и флаги
+CC = gcc
+CXX = g++
+CFLAGS = -Wall -Wextra -O2
+CXXFLAGS = -Wall -Wextra -O2
+
+# Пути к SGX SDK
 SGX_SDK ?= /opt/intel/sgxsdk
 SGX_MODE ?= HW
 SGX_ARCH ?= x64
@@ -23,6 +29,36 @@ else
 	SGX_EDGER8R := $(SGX_SDK)/bin/x64/sgx_edger8r
 endif
 
+# Имена файлов
+ENCLAVE_NAME = libenclave
+APP_NAME = app
+
+# Исходные файлы
+ENCLAVE_SOURCES = Enclave/Enclave.cpp
+APP_SOURCES = App/App.cpp
+
+# Объектные файлы
+ENCLAVE_OBJS = $(ENCLAVE_SOURCES:.cpp=.o)
+APP_OBJS = $(APP_SOURCES:.cpp=.o)
+
+# Заголовочные файлы
+ENCLAVE_HEADERS = Enclave/Enclave.h Enclave/Enclave_t.h
+APP_HEADERS = App/App.h
+
+# Флаги компиляции
+ENCLAVE_CFLAGS = -m64 -O2 -fPIC -fstack-protector -fno-strict-overflow -fno-delete-null-pointer-checks -fwrapv -fno-strict-aliasing -fno-strict-overflow -fno-delete-null-pointer-checks -fwrapv -fno-strict-aliasing -I$(SGX_SDK)/include -I.
+ENCLAVE_CXXFLAGS = $(ENCLAVE_CFLAGS) -std=c++11
+APP_CFLAGS = -m64 -O2 -fPIC -fstack-protector -fno-strict-overflow -fno-delete-null-pointer-checks -fwrapv -fno-strict-aliasing -fno-strict-overflow -fno-delete-null-pointer-checks -fwrapv -fno-strict-aliasing -I$(SGX_SDK)/include -I.
+APP_CXXFLAGS = $(APP_CFLAGS) -std=c++11
+
+# Флаги линковки
+ENCLAVE_LDFLAGS = -m64 -O2 -fPIC -fstack-protector -fno-strict-overflow -fno-delete-null-pointer-checks -fwrapv -fno-strict-aliasing -fno-strict-overflow -fno-delete-null-pointer-checks -fwrapv -fno-strict-aliasing -L$(SGX_LIBRARY_PATH)
+APP_LDFLAGS = -m64 -O2 -fPIC -fstack-protector -fno-strict-overflow -fno-delete-null-pointer-checks -fwrapv -fno-strict-aliasing -fno-strict-overflow -fno-delete-null-pointer-checks -fwrapv -fno-strict-aliasing -L$(SGX_LIBRARY_PATH) -lsgx_uprotected_fs -lpthread
+
+# Библиотеки
+ENCLAVE_LIBS = -lsgx_trts -lsgx_tcrypto -lsgx_tseal
+APP_LIBS = -lsgx_urts -lsgx_uae_service
+
 # Application settings
 App_Cpp_Files := App/App.cpp App/sgx_utils/sgx_utils.cpp
 App_Include_Paths := -I$(SGX_SDK)/include -IApp -IApp/sgx_utils
@@ -42,7 +78,7 @@ else
 endif
 
 App_Cpp_Flags := $(App_C_Flags) -std=c++11
-App_Link_Flags := $(SGX_COMMON_CFLAGS) -L$(SGX_LIBRARY_PATH) -lsgx_urts -lsgx_uae_service -lpthread
+App_Link_Flags := $(SGX_COMMON_CFLAGS) -L$(SGX_LIBRARY_PATH) -lsgx_urts -lsgx_uae_service -lsgx_uprotected_fs -lpthread
 
 # Enclave settings
 Enclave_Cpp_Files := Enclave/Enclave.cpp
@@ -64,7 +100,7 @@ Enclave_Cpp_Flags := $(Enclave_C_Flags) -std=c++11 -nostdinc++
 # Otherwise, you may get some undesirable errors.
 Enclave_Link_Flags := $(SGX_COMMON_CFLAGS) -Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfiles -L$(SGX_LIBRARY_PATH) \
     -Wl,--whole-archive -lsgx_trts -Wl,--no-whole-archive \
-    -Wl,--start-group -lsgx_tstdc -lsgx_tcxx -lsgx_tcrypto -lsgx_tservice -Wl,--end-group \
+    -Wl,--start-group -lsgx_tstdc -lsgx_tcxx -lsgx_tcrypto -lsgx_tservice -lsgx_tprotected_fs -lpthread -Wl,--end-group \
     -Wl,-Bstatic -Wl,-Bsymbolic -Wl,--no-undefined \
     -Wl,-pie,-eenclave_entry -Wl,--export-dynamic  \
     -Wl,--defsym,__ImageBase=0 -Wl,--gc-sections
@@ -180,3 +216,9 @@ lib/secp256k1/src/precomputed_ecmult_gen.o: lib/secp256k1/src/precomputed_ecmult
 clean:
 	@rm -f .config_* $(App_Name) $(Enclave_Name) $(Signed_Enclave_Name) $(Enclave_C_Objects) $(Enclave_Cpp_Objects) App/Enclave_u.* Enclave/Enclave_t.*
 	@echo "Clean completed."
+
+# Запуск тестов
+test: all
+	python3 test_account_pool.py
+
+.PHONY: all clean test

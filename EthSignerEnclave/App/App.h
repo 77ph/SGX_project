@@ -1,26 +1,25 @@
 #ifndef _APP_H_
 #define _APP_H_
 
-#include <stdio.h>
-#include <string.h>
 #include <assert.h>
-#include "sgx_urts.h"
+#include <fcntl.h>
+#include <pthread.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+
 #include "sgx_utils/sgx_utils.h"
+
+/* Hard-coded filename for the enclave image you will build */
+#define ENCLAVE_FILENAME "enclave.signed.so"
 
 #if defined(__cplusplus)
 extern "C" {
-#endif
-
-#if defined(SGX_SIM)
-    #define ENCLAVE_FILENAME "enclave.so"
-#else
-    #define ENCLAVE_FILENAME "enclave.signed.so"
-#endif
-
-#if defined(SGX_DEBUG)
-    #define SGX_DEBUG_FLAG 1
-#else
-    #define SGX_DEBUG_FLAG 0
 #endif
 
 void ocall_print(const char* str);
