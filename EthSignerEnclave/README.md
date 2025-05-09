@@ -41,7 +41,7 @@ make clean && make SGX_MODE=HW SGX_DEBUG=1
 
 ## Available Commands
 - `generate_account` - Generate a new Ethereum account
-- `sign_transaction <tx_hash>` - Sign a transaction with the stored private key
+- `sign_tx 0000000000000000000000000000000000000000000000000000000000000001` - Sign a transaction with the stored private key
 - `save_account_state` - Save the current account state
 - `load_account_state` - Load a previously saved account state
 - `test_key_strength` - Test private key generation and strength

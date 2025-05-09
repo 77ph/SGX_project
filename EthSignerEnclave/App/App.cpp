@@ -143,15 +143,16 @@ int main(int argc, char *argv[]) {
     char arg[256];
     printf("Enter commands (type 'exit' to quit):\n");
     printf("Available commands:\n");
-    printf("  generate_account\n");
-    printf("  save_account_state\n");
-    printf("  load_account_state\n");
-    printf("  sign_tx <tx_hash>\n");
+    printf("  generate_account - Generate a new Ethereum account\n");
+    printf("  sign_tx 0000000000000000000000000000000000000000000000000000000000000001 - Sign a transaction\n");
+    printf("  save_account_state - Save the current account state\n");
+    printf("  load_account_state - Load a previously saved account state\n");
     printf("  test_key_strength - Test private key generation and strength\n");
     printf("  test_entropy - Test entropy generation\n");
-    printf("  test_save_load - Test save/load cycle\n");
+    printf("  test_save_load - Test the save/load cycle\n");
     printf("  test_sign_verify - Test transaction signing and verification\n");
-    printf("  exit\n\n");
+    printf("  help - Show this help message\n");
+    printf("  exit - Exit the application\n");
 
     while (1) {
         printf("> ");
