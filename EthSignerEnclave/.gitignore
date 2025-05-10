@@ -3,14 +3,18 @@
 *.so
 *.a
 *.out
+app
 
 # SGX generated files
 *.sealed
 *.signed
 *.config__*
+App/Enclave_u.*
+Enclave/Enclave_t.*
 
 # Account files
 *.account
+0x*
 
 # IDE and editor files
 .vscode/
