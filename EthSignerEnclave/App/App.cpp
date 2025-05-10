@@ -265,25 +265,28 @@ int main(int argc, char *argv[]) {
             printf("Save/load test completed successfully\n");
         }
         else if (strcmp(command, "test_sign_verify") == 0) {
-            printf("Testing sign/verify cycle...\n");
             status = ecall_test_sign_verify(global_eid, &retval);
             if (status != SGX_SUCCESS || retval != 0) {
-                printf("Error: Sign/verify test failed\n");
+                printf("Error: Test sign/verify failed\n");
                 continue;
             }
-            printf("Sign/verify test completed successfully\n");
+            printf("Test sign/verify completed successfully\n");
         }
-        else {
-            printf("Unknown command. Available commands:\n");
-            printf("  generate_account\n");
-            printf("  save_account_state\n");
-            printf("  load_account_state\n");
-            printf("  sign_tx <tx_hash>\n");
+        else if (strcmp(command, "help") == 0) {
+            printf("Available commands:\n");
+            printf("  generate_account - Generate a new Ethereum account\n");
+            printf("  sign_tx 0000000000000000000000000000000000000000000000000000000000000001 - Sign a transaction\n");
+            printf("  save_account_state - Save the current account state\n");
+            printf("  load_account_state - Load a previously saved account state\n");
             printf("  test_key_strength - Test private key generation and strength\n");
             printf("  test_entropy - Test entropy generation\n");
-            printf("  test_save_load - Test save/load cycle\n");
+            printf("  test_save_load - Test the save/load cycle\n");
             printf("  test_sign_verify - Test transaction signing and verification\n");
-            printf("  exit\n");
+            printf("  help - Show this help message\n");
+            printf("  exit - Exit the application\n");
+        }
+        else {
+            printf("Unknown command. Type 'help' for available commands.\n");
         }
         printf("\n");
     }
