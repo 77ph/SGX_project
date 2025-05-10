@@ -305,7 +305,6 @@ int ecall_generate_account(void) {
     memcpy(current_account.private_key, private_key, sizeof(private_key));
     memcpy(current_account.public_key, serialized_pubkey, sizeof(serialized_pubkey));
     memcpy(current_account.address, address, sizeof(address));
-    current_account.nonce = 0;
     current_account.is_initialized = true;
     printf("Account data stored\n");
     

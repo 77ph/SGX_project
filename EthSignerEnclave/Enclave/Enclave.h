@@ -57,9 +57,8 @@ typedef struct {
     uint8_t private_key[32];
     uint8_t public_key[65];
     uint8_t address[20];
-    uint32_t nonce;
-    bool is_initialized;
     uint8_t hmac[32];
+    bool is_initialized;
 } Account;
 
 // Структура для хранения данных аккаунта с ID
