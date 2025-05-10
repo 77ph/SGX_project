@@ -1,24 +1,35 @@
 # Build artifacts
 *.o
 *.so
-*.signed.so
-*.token
-app
+*.a
+*.out
 
-# Generated files
-App/Enclave_u.*
-Enclave/Enclave_t.*
+# SGX generated files
+*.sealed
+*.signed
+*.config__*
+
+# Account files
+*.account
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*~
 
 # Temporary files
-*.lalptop
-*~
+*.tmp
+*.temp
+
+# Log files
+*.log
+
+# Other
+resume.txt
 
 # Backup directories
 backup_*/
-
-# IDE files
-.vscode/
-.idea/
 
 # System files
 .DS_Store
