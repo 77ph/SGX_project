@@ -645,7 +645,7 @@ int ecall_unload_account_from_pool(const char* account_id) {
 
     // Очистка данных
     secure_memzero(&account_pool.accounts[account_index].account, sizeof(Account));
-    memset(account_pool.accounts[account_index].account_id, 0, MAX_ACCOUNT_ID_LEN);
+    secure_memzero(account_pool.accounts[account_index].account_id, MAX_ACCOUNT_ID_LEN);
     account_pool.accounts[account_index].is_loaded = false;
 
     return 0;
@@ -761,7 +761,7 @@ int ecall_sign_with_account(const uint8_t* message_hash, size_t message_hash_len
 
 // Account pool management
 int ecall_init_account_pool() {
-    memset(&account_pool, 0, sizeof(AccountPool));
+    secure_memzero(&account_pool, sizeof(AccountPool));
     return 0;
 }
 
@@ -824,7 +824,7 @@ int ecall_test_save_load(void) {
     printf("Test account saved\n");
     
     // Clear current account
-    memset(&current_account, 0, sizeof(Account));
+    secure_memzero(&current_account, sizeof(Account));
     current_account.is_initialized = false;
     printf("Current account cleared\n");
     
