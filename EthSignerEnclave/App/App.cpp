@@ -144,9 +144,8 @@ int main(int argc, char *argv[]) {
     printf("Enter commands (type 'exit' to quit):\n");
     printf("Available commands:\n");
     printf("  generate_account - Generate a new Ethereum account\n");
+    printf("  load_account 0x1234...5678 - Load account by Ethereum address\n");
     printf("  sign_tx 0000000000000000000000000000000000000000000000000000000000000001 - Sign a transaction\n");
-    printf("  save_account_state - Save the current account state\n");
-    printf("  load_account_state - Load a previously saved account state\n");
     printf("  test_key_strength - Test private key generation and strength\n");
     printf("  test_entropy - Test entropy generation\n");
     printf("  test_save_load - Test the save/load cycle\n");
@@ -182,21 +181,17 @@ int main(int argc, char *argv[]) {
             }
             printf("Account generated successfully\n");
         }
-        else if (strcmp(command, "save_account_state") == 0) {
-            status = ecall_save_account_state(global_eid, &retval);
-            if (status != SGX_SUCCESS || retval != 0) {
-                printf("Error: Failed to save account state\n");
+        else if (strcmp(command, "load_account") == 0) {
+            if (strlen(arg) < 42 || strncmp(arg, "0x", 2) != 0) {
+                printf("Error: Invalid Ethereum address format. Expected: 0x followed by 40 hex characters\n");
                 continue;
             }
-            printf("Account state saved successfully\n");
-        }
-        else if (strcmp(command, "load_account_state") == 0) {
-            status = ecall_load_account_state(global_eid, &retval);
+            status = ecall_load_account(global_eid, &retval, arg);
             if (status != SGX_SUCCESS || retval != 0) {
-                printf("Error: Failed to load account state\n");
+                printf("Error: Failed to load account\n");
                 continue;
             }
-            printf("Account state loaded successfully\n");
+            printf("Account loaded successfully\n");
         }
         else if (strcmp(command, "sign_tx") == 0) {
             if (strlen(arg) != 64) {
@@ -275,9 +270,8 @@ int main(int argc, char *argv[]) {
         else if (strcmp(command, "help") == 0) {
             printf("Available commands:\n");
             printf("  generate_account - Generate a new Ethereum account\n");
+            printf("  load_account 0x1234...5678 - Load account by Ethereum address\n");
             printf("  sign_tx 0000000000000000000000000000000000000000000000000000000000000001 - Sign a transaction\n");
-            printf("  save_account_state - Save the current account state\n");
-            printf("  load_account_state - Load a previously saved account state\n");
             printf("  test_key_strength - Test private key generation and strength\n");
             printf("  test_entropy - Test entropy generation\n");
             printf("  test_save_load - Test the save/load cycle\n");

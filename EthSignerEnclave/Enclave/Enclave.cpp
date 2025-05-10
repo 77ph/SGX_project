@@ -383,34 +383,28 @@ int ecall_sign_transaction(const uint8_t* tx_hash, size_t tx_hash_size,
 int ecall_save_account(const char* account_id) {
     printf("Saving account with ID: %s\n", account_id);
     
-    if (!account_id || strlen(account_id) >= MAX_ACCOUNT_ID_LEN) {
-        printf("Invalid account ID\n");
-        return -1;
-    }
-
     if (!current_account.is_initialized) {
         printf("Account is not initialized\n");
         return -1;
     }
 
     // Create structure for saving
-    AccountData data;
-    memcpy(data.account_id, account_id, strlen(account_id) + 1);
+    AccountFile data;
     memcpy(&data.account, &current_account, sizeof(Account));
     printf("Account data copied to save structure\n");
 
     // Calculate HMAC
     uint8_t computed_hash[32];
-    sgx_status_t status = sgx_sha256_msg((const uint8_t*)&data, sizeof(AccountData) - 32, (sgx_sha256_hash_t*)computed_hash);
+    sgx_status_t status = sgx_sha256_msg((const uint8_t*)&data, sizeof(AccountFile) - 32, (sgx_sha256_hash_t*)computed_hash);
     if (status != SGX_SUCCESS) {
         printf("Failed to calculate HMAC: %d\n", status);
         return -1;
     }
-    memcpy(data.hmac, computed_hash, 32);
+    memcpy(data.file_hmac, computed_hash, 32);
     printf("HMAC calculated and stored\n");
 
     // Encrypt data
-    size_t sealed_size = sgx_calc_sealed_data_size(0, sizeof(AccountData));
+    size_t sealed_size = sgx_calc_sealed_data_size(0, sizeof(AccountFile));
     if (sealed_size == UINT32_MAX) {
         printf("Failed to calculate sealed data size\n");
         return -1;
@@ -422,7 +416,7 @@ int ecall_save_account(const char* account_id) {
         return -1;
     }
 
-    status = sgx_seal_data(0, NULL, sizeof(AccountData), (uint8_t*)&data, sealed_size, (sgx_sealed_data_t*)sealed_data);
+    status = sgx_seal_data(0, NULL, sizeof(AccountFile), (uint8_t*)&data, sealed_size, (sgx_sealed_data_t*)sealed_data);
     if (status != SGX_SUCCESS) {
         printf("Failed to seal data: %d\n", status);
         free(sealed_data);
@@ -430,9 +424,14 @@ int ecall_save_account(const char* account_id) {
     }
     printf("Data sealed successfully\n");
 
-    // Save encrypted data
+    // Save encrypted data using Ethereum address as filename
     char filename[256];
-    snprintf(filename, sizeof(filename), "%s.sealed", account_id);
+    snprintf(filename, sizeof(filename), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x.account",
+             current_account.address[0], current_account.address[1], current_account.address[2], current_account.address[3],
+             current_account.address[4], current_account.address[5], current_account.address[6], current_account.address[7],
+             current_account.address[8], current_account.address[9], current_account.address[10], current_account.address[11],
+             current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
+             current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
     
     int ret = 0;
     status = ocall_save_to_file(&ret, sealed_data, sealed_size, filename);
@@ -450,14 +449,14 @@ int ecall_save_account(const char* account_id) {
 int ecall_load_account(const char* account_id) {
     printf("Loading account with ID: %s\n", account_id);
     
-    if (!account_id || strlen(account_id) >= MAX_ACCOUNT_ID_LEN) {
+    if (!account_id) {
         printf("Invalid account ID\n");
         return -1;
     }
 
     // Открытие файла
     char filename[256];
-    snprintf(filename, sizeof(filename), "%s.sealed", account_id);
+    snprintf(filename, sizeof(filename), "%s.account", account_id);
     printf("Opening file: %s\n", filename);
     
     // Получение размера файла через OCALL
@@ -506,7 +505,7 @@ int ecall_load_account(const char* account_id) {
     sgx_status_t unseal_status = sgx_unseal_data((sgx_sealed_data_t*)sealed_data, NULL, NULL, decrypted_data, &decrypted_size);
     free(sealed_data);
 
-    if (unseal_status != SGX_SUCCESS || decrypted_size != sizeof(AccountData)) {
+    if (unseal_status != SGX_SUCCESS || decrypted_size != sizeof(AccountFile)) {
         printf("Failed to unseal data: status=%d, size=%u\n", unseal_status, decrypted_size);
         free(decrypted_data);
         return -1;
@@ -514,27 +513,35 @@ int ecall_load_account(const char* account_id) {
     printf("Data unsealed successfully\n");
 
     // Проверка HMAC
-    AccountData* data = (AccountData*)decrypted_data;
+    AccountFile* data = (AccountFile*)decrypted_data;
     uint8_t computed_hash[32];
-    sgx_status_t hmac_status = sgx_sha256_msg((const uint8_t*)data, sizeof(AccountData) - 32, (sgx_sha256_hash_t*)computed_hash);
-    if (hmac_status != SGX_SUCCESS || memcmp(data->hmac, computed_hash, 32) != 0) {
+    sgx_status_t hmac_status = sgx_sha256_msg((const uint8_t*)data, sizeof(AccountFile) - 32, (sgx_sha256_hash_t*)computed_hash);
+    if (hmac_status != SGX_SUCCESS || memcmp(data->file_hmac, computed_hash, 32) != 0) {
         printf("HMAC verification failed\n");
         free(decrypted_data);
         return -1;
     }
     printf("HMAC verified successfully\n");
 
-    // Проверка ID аккаунта
-    if (strcmp(data->account_id, account_id) != 0) {
-        printf("Account ID mismatch\n");
+    // Проверка адреса
+    char expected_filename[256];
+    snprintf(expected_filename, sizeof(expected_filename), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x.account",
+             data->account.address[0], data->account.address[1], data->account.address[2], data->account.address[3],
+             data->account.address[4], data->account.address[5], data->account.address[6], data->account.address[7],
+             data->account.address[8], data->account.address[9], data->account.address[10], data->account.address[11],
+             data->account.address[12], data->account.address[13], data->account.address[14], data->account.address[15],
+             data->account.address[16], data->account.address[17], data->account.address[18], data->account.address[19]);
+    
+    if (strcmp(filename, expected_filename) != 0) {
+        printf("Account address mismatch\n");
         free(decrypted_data);
         return -1;
     }
-    printf("Account ID verified\n");
+    printf("Account address verified\n");
 
     // Копирование данных аккаунта
     memcpy(&current_account, &data->account, sizeof(Account));
-    current_account.is_initialized = true;  // Явно устанавливаем флаг инициализации
+    current_account.is_initialized = true;
     printf("Account data copied successfully\n");
     printf("First 8 bytes of loaded private key: ");
     for (int i = 0; i < 8; i++) {

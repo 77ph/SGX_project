@@ -61,6 +61,11 @@ typedef struct {
     bool is_initialized;
 } Account;
 
+typedef struct {
+    Account account;
+    uint8_t file_hmac[32];
+} AccountFile;
+
 // Структура для хранения данных аккаунта с ID
 typedef struct {
     char account_id[MAX_ACCOUNT_ID_LEN];
