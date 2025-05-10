@@ -822,8 +822,16 @@ int ecall_test_save_load(void) {
     }
     printf("Test account generated\n");
     
-    // Save account
-    if (ecall_save_account("test_save_load") != 0) {
+    // Save account using Ethereum address
+    char filename[256];
+    snprintf(filename, sizeof(filename), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+             current_account.address[0], current_account.address[1], current_account.address[2], current_account.address[3],
+             current_account.address[4], current_account.address[5], current_account.address[6], current_account.address[7],
+             current_account.address[8], current_account.address[9], current_account.address[10], current_account.address[11],
+             current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
+             current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
+    
+    if (ecall_save_account(filename) != 0) {
         printf("Failed to save test account\n");
         return -1;
     }
@@ -834,8 +842,8 @@ int ecall_test_save_load(void) {
     current_account.is_initialized = false;
     printf("Current account cleared\n");
     
-    // Load account
-    if (ecall_load_account("test_save_load") != 0) {
+    // Load account using Ethereum address (without .account extension)
+    if (ecall_load_account(filename) != 0) {
         printf("Failed to load test account\n");
         return -1;
     }
