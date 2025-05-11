@@ -44,7 +44,7 @@ extern void* g_peak_rsrv_mem_committed;
 
 // Константы
 #define MAX_ACCOUNT_ID_LEN 32
-#define MAX_POOL_SIZE 10
+#define MAX_POOL_SIZE 100  // Увеличиваем размер пула до 100 аккаунтов
 
 // Security constants
 #define MIN_ENTROPY_BITS 7.0  // Minimum entropy in bits for a 32-byte key
@@ -78,12 +78,17 @@ typedef struct {
     Account account;
     char account_id[MAX_ACCOUNT_ID_LEN];
     bool is_loaded;
+    uint32_t hash;      // хеш адреса для быстрого поиска
+    uint32_t use_count; // счетчик использований (подписей)
 } PoolAccount;
 
 // Структура для хранения пула аккаунтов
 typedef struct {
     PoolAccount accounts[MAX_POOL_SIZE];
 } AccountPool;
+
+// Enclave initialization
+sgx_status_t sgx_ecall_initialize();
 
 // Наша собственная функция для вывода в энклаве
 int enclave_printf(const char *fmt, ...);

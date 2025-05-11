@@ -49,6 +49,40 @@ extern "C" {
 static Account current_account = {0};
 static AccountData current_account_data = {0};
 
+// Global pool instance
+static AccountPool account_pool = {0};
+
+// Initialize account pool
+static bool initialize_account_pool() {
+    printf("Initializing account pool...\n");
+    
+    // Initialize all slots as free
+    for (int i = 0; i < MAX_POOL_SIZE; i++) {
+        account_pool.accounts[i].is_loaded = false;
+        account_pool.accounts[i].use_count = 0;
+        account_pool.accounts[i].hash = 0;
+        secure_memzero(&account_pool.accounts[i].account, sizeof(Account));
+        secure_memzero(account_pool.accounts[i].account_id, MAX_ACCOUNT_ID_LEN);
+    }
+    
+    printf("Account pool initialized with %d slots\n", MAX_POOL_SIZE);
+    return true;
+}
+
+// Enclave initialization function
+sgx_status_t sgx_ecall_initialize() {
+    printf("Initializing enclave...\n");
+    
+    // Initialize account pool
+    if (!initialize_account_pool()) {
+        printf("Failed to initialize account pool\n");
+        return SGX_ERROR_UNEXPECTED;
+    }
+    
+    printf("Enclave initialized successfully\n");
+    return SGX_SUCCESS;
+}
+
 // Security constants
 // MIN_ENTROPY_BITS is defined in Enclave.h
 #define KEY_GENERATION_MAX_ATTEMPTS 100
@@ -602,11 +636,6 @@ int ecall_sign_with_stored_key(const uint8_t* tx_hash, size_t tx_hash_size,
 int ecall_sign_with_account(const uint8_t* message_hash, size_t message_hash_len,
                           uint8_t* signature, size_t signature_len) {
     printf("WARNING: ecall_sign_with_account is deprecated\n");
-    return -1;
-}
-
-int ecall_init_account_pool() {
-    printf("WARNING: ecall_init_account_pool is deprecated\n");
     return -1;
 }
 
