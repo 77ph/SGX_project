@@ -666,7 +666,59 @@ static int test_find_account_in_pool() {
     return 0;
 }
 
-// Test function
+// Test function for ecall_load_account_to_pool
+static int test_load_account_to_pool() {
+    printf("\nTesting ecall_load_account_to_pool...\n");
+    
+    // Test 1: Load with null account_id
+    int result = ecall_load_account_to_pool(NULL);
+    printf("Test 1 (null account_id): result = %d (expected -1)\n", result);
+    
+    // Test 2: Generate and load test account
+    printf("\nTest 2: Generate and load test account...\n");
+    if (ecall_generate_account() != 0) {
+        printf("Failed to generate test account\n");
+        return -1;
+    }
+    
+    // Save account to get its address
+    if (ecall_save_account("default") != 0) {
+        printf("Failed to save test account\n");
+        return -1;
+    }
+    
+    // Load account to pool
+    char account_id[43]; // 0x + 40 hex chars + null terminator
+    snprintf(account_id, sizeof(account_id), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+             current_account.address[0], current_account.address[1], current_account.address[2], current_account.address[3],
+             current_account.address[4], current_account.address[5], current_account.address[6], current_account.address[7],
+             current_account.address[8], current_account.address[9], current_account.address[10], current_account.address[11],
+             current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
+             current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
+    
+    result = ecall_load_account_to_pool(account_id);
+    printf("Test 2 (load account): result = %d (expected >= 0)\n", result);
+    if (result < 0) {
+        return -1;
+    }
+    
+    // Test 3: Try to load same account again
+    result = ecall_load_account_to_pool(account_id);
+    printf("Test 3 (load duplicate): result = %d (expected -1)\n", result);
+    
+    // Test 4: Load non-existent account
+    result = ecall_load_account_to_pool("0x0000000000000000000000000000000000000000");
+    printf("Test 4 (load non-existent): result = %d (expected -1)\n", result);
+    
+    // Cleanup
+    secure_memzero(&account_pool.accounts[0].account, sizeof(Account));
+    account_pool.accounts[0].use_count = 0;
+    printf("\nTest cleanup completed\n");
+    
+    return 0;
+}
+
+// Update ecall_test_function to include new test
 int ecall_test_function() {
     printf("Running test suite...\n");
     
@@ -676,6 +728,13 @@ int ecall_test_function() {
         return -1;
     }
     printf("find_account_in_pool test passed\n");
+    
+    // Test load_account_to_pool
+    if (test_load_account_to_pool() != 0) {
+        printf("load_account_to_pool test failed\n");
+        return -1;
+    }
+    printf("load_account_to_pool test passed\n");
     
     return 0;
 }
@@ -707,8 +766,56 @@ int ecall_sign_with_account(const uint8_t* message_hash, size_t message_hash_len
 }
 
 int ecall_load_account_to_pool(const char* account_id) {
-    printf("WARNING: ecall_load_account_to_pool is deprecated\n");
-    return -1;
+    printf("Loading account %s to pool...\n", account_id);
+    
+    if (!account_id) {
+        printf("Invalid account ID\n");
+        return -1;
+    }
+
+    // Check if account is already in pool
+    if (find_account_in_pool((const uint8_t*)account_id) != -1) {
+        printf("Account already in pool\n");
+        return -1;
+    }
+
+    // Load account
+    if (ecall_load_account(account_id) != 0) {
+        printf("Failed to load account\n");
+        return -1;
+    }
+    printf("Account loaded successfully\n");
+
+    // Find free slot in pool
+    int free_slot = -1;
+    for (int i = 0; i < MAX_POOL_SIZE; i++) {
+        if (!account_pool.accounts[i].account.is_initialized) {
+            free_slot = i;
+            break;
+        }
+    }
+
+    if (free_slot == -1) {
+        printf("No free slots in pool\n");
+        return -1;
+    }
+    printf("Found free slot at index %d\n", free_slot);
+
+    // Copy account to pool
+    memcpy(&account_pool.accounts[free_slot].account, &current_account, sizeof(Account));
+    account_pool.accounts[free_slot].use_count = 0;
+    printf("Account copied to pool at index %d\n", free_slot);
+
+    // Verify account was added correctly
+    if (find_account_in_pool(current_account.address) != free_slot) {
+        printf("Failed to verify account in pool\n");
+        secure_memzero(&account_pool.accounts[free_slot].account, sizeof(Account));
+        account_pool.accounts[free_slot].use_count = 0;
+        return -1;
+    }
+
+    printf("Account successfully loaded to pool at index %d\n", free_slot);
+    return free_slot;
 }
 
 int ecall_unload_account_from_pool(const char* account_id) {
@@ -862,6 +969,15 @@ int ecall_test_sign_verify(void) {
     secp256k1_context_destroy(ctx);
     return 0;
 }
+
+// TODO: Refactor use_count
+// Current implementation stores use_count in PoolAccount structure, which means it's lost when account is unloaded
+// Plan for refactoring:
+// 1. Move use_count to Account structure
+// 2. Update AccountFile structure to include use_count
+// 3. Update save/load functions to handle use_count
+// 4. Update pool functions to use Account.use_count instead of PoolAccount.use_count
+// This will allow us to persist usage statistics between pool loads/unloads
 
 #ifdef __cplusplus
 }
