@@ -49,13 +49,6 @@ extern "C" {
 static Account current_account = {0};
 static AccountData current_account_data = {0};
 
-// Глобальная переменная для хранения приватного ключа
-// static uint8_t stored_private_key[32] = {0};
-// static bool is_key_stored = false;
-
-// Глобальный пул аккаунтов
-// static AccountPool account_pool = {0};
-
 // Security constants
 // MIN_ENTROPY_BITS is defined in Enclave.h
 #define KEY_GENERATION_MAX_ATTEMPTS 100
@@ -233,32 +226,6 @@ sgx_status_t generate_secure_private_key(uint8_t* private_key, size_t size) {
 AccountData* get_current_account(void) {
     return &current_account_data;
 }
-
-// Helper function to add account to pool
-/*
-bool add_account_to_pool(const char* account_id, const AccountData& account) {
-    if (!account_id) return false;
-    
-    // Find free slot
-    int free_slot = -1;
-    for (int i = 0; i < MAX_POOL_SIZE; i++) {
-        if (!account_pool.accounts[i].is_loaded) {
-            free_slot = i;
-            break;
-        }
-    }
-    
-    if (free_slot == -1) return false;
-    
-    // Copy account data
-    memcpy(&account_pool.accounts[free_slot].account, &account.account, sizeof(Account));
-    strncpy(account_pool.accounts[free_slot].account_id, account_id, MAX_ACCOUNT_ID_LEN - 1);
-    account_pool.accounts[free_slot].account_id[MAX_ACCOUNT_ID_LEN - 1] = '\0';
-    account_pool.accounts[free_slot].is_loaded = true;
-    
-    return true;
-}
-*/
 
 // Keccak-256 implementation
 void keccak_256(const uint8_t* input, size_t input_len, uint8_t* output) {
