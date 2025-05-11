@@ -121,18 +121,22 @@ bool is_strong_private_key(const uint8_t* private_key, size_t size) {
     }
     printf("\n");
     
-    // Check if key is within valid range
-    uint64_t key_value = 0;
-    memcpy(&key_value, private_key, sizeof(uint64_t));
-    printf("Key value: 0x%016llx\n", (unsigned long long)key_value);
-    printf("Valid range: 0x%016llx - 0x%016llx\n", 
-           (unsigned long long)MIN_PRIVATE_KEY_VALUE, 
-           (unsigned long long)MAX_PRIVATE_KEY_VALUE);
-    
-    if (key_value < MIN_PRIVATE_KEY_VALUE || key_value > MAX_PRIVATE_KEY_VALUE) {
-        printf("Key value out of valid range\n");
+    // Create secp256k1 context for verification
+    secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
+    if (!ctx) {
+        printf("Failed to create secp256k1 context\n");
         return false;
     }
+    
+    // Verify key using secp256k1
+    bool is_valid = secp256k1_ec_seckey_verify(ctx, private_key);
+    secp256k1_context_destroy(ctx);
+    
+    if (!is_valid) {
+        printf("Key failed secp256k1 validation\n");
+        return false;
+    }
+    printf("Key passed secp256k1 validation\n");
     
     // Check for weak patterns
     bool has_weak_pattern = true;
