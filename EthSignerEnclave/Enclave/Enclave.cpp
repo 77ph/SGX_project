@@ -604,8 +604,79 @@ int ecall_sign_message(const uint8_t* message, size_t message_len, uint8_t* sign
     return 0;
 }
 
+// Helper function to find account in pool by address
+static int find_account_in_pool(const uint8_t* address) {
+    if (!address) {
+        printf("Invalid address parameter\n");
+        return -1;
+    }
+
+    for (int i = 0; i < MAX_POOL_SIZE; i++) {
+        if (account_pool.accounts[i].account.is_initialized &&
+            memcmp(account_pool.accounts[i].account.address, address, 20) == 0) {
+            printf("Found account at pool index %d\n", i);
+            return i;
+        }
+    }
+
+    printf("Account not found in pool\n");
+    return -1;
+}
+
+// Test function for find_account_in_pool
+static int test_find_account_in_pool() {
+    printf("\nTesting find_account_in_pool...\n");
+    
+    // Test 1: Find in empty pool
+    uint8_t test_address[20] = {0};
+    int result = find_account_in_pool(test_address);
+    printf("Test 1 (empty pool): result = %d (expected -1)\n", result);
+    
+    // Test 2: Add test account to pool
+    printf("\nTest 2: Adding test account to pool...\n");
+    // Generate test account
+    if (ecall_generate_account() != 0) {
+        printf("Failed to generate test account\n");
+        return -1;
+    }
+    
+    // Add to pool at index 0
+    memcpy(&account_pool.accounts[0].account, &current_account, sizeof(Account));
+    account_pool.accounts[0].use_count = 0;
+    printf("Test account added to pool at index 0\n");
+    
+    // Test 3: Find existing account
+    result = find_account_in_pool(current_account.address);
+    printf("Test 3 (find existing): result = %d (expected 0)\n", result);
+    
+    // Test 4: Find non-existent account
+    uint8_t non_existent[20] = {0xFF}; // Different address
+    result = find_account_in_pool(non_existent);
+    printf("Test 4 (find non-existent): result = %d (expected -1)\n", result);
+    
+    // Test 5: Find with null address
+    result = find_account_in_pool(NULL);
+    printf("Test 5 (null address): result = %d (expected -1)\n", result);
+    
+    // Cleanup
+    secure_memzero(&account_pool.accounts[0].account, sizeof(Account));
+    account_pool.accounts[0].use_count = 0;
+    printf("\nTest cleanup completed\n");
+    
+    return 0;
+}
+
 // Test function
 int ecall_test_function() {
+    printf("Running test suite...\n");
+    
+    // Test find_account_in_pool
+    if (test_find_account_in_pool() != 0) {
+        printf("find_account_in_pool test failed\n");
+        return -1;
+    }
+    printf("find_account_in_pool test passed\n");
+    
     return 0;
 }
 
