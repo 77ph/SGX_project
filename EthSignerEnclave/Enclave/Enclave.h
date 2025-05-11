@@ -66,20 +66,10 @@ typedef struct {
     uint8_t file_hmac[32];
 } AccountFile;
 
-// Структура для хранения данных аккаунта с ID
-typedef struct {
-    char account_id[MAX_ACCOUNT_ID_LEN];
-    Account account;
-    uint8_t hmac[32];
-} AccountData;
-
 // Структура для хранения аккаунта в пуле
 typedef struct {
     Account account;
-    char account_id[MAX_ACCOUNT_ID_LEN];
-    bool is_loaded;
-    uint32_t hash;      // хеш адреса для быстрого поиска
-    uint32_t use_count; // счетчик использований (подписей)
+    uint32_t use_count;    // счетчик использований (подписей)
 } PoolAccount;
 
 // Структура для хранения пула аккаунтов
@@ -123,8 +113,8 @@ void secure_memzero(void* ptr, size_t len);
 double calculate_entropy(const uint8_t* data, size_t size);
 bool is_strong_private_key(const uint8_t* private_key, size_t size);
 sgx_status_t generate_secure_private_key(uint8_t* private_key, size_t size);
-bool add_account_to_pool(const char* account_id, const AccountData& account);
-AccountData* get_current_account(void);
+bool add_account_to_pool(const char* account_id, const Account& account);
+Account* get_current_account(void);
 void keccak_256(const uint8_t* input, size_t input_len, uint8_t* output);
 
 #if defined(__cplusplus)

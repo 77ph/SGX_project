@@ -47,7 +47,6 @@ extern "C" {
 
 // Global account instance
 static Account current_account = {0};
-static AccountData current_account_data = {0};
 
 // Global pool instance
 static AccountPool account_pool = {0};
@@ -58,11 +57,8 @@ static bool initialize_account_pool() {
     
     // Initialize all slots as free
     for (int i = 0; i < MAX_POOL_SIZE; i++) {
-        account_pool.accounts[i].is_loaded = false;
         account_pool.accounts[i].use_count = 0;
-        account_pool.accounts[i].hash = 0;
         secure_memzero(&account_pool.accounts[i].account, sizeof(Account));
-        secure_memzero(account_pool.accounts[i].account_id, MAX_ACCOUNT_ID_LEN);
     }
     
     printf("Account pool initialized with %d slots\n", MAX_POOL_SIZE);
@@ -257,8 +253,8 @@ sgx_status_t generate_secure_private_key(uint8_t* private_key, size_t size) {
 }
 
 // Helper function to get current account
-AccountData* get_current_account(void) {
-    return &current_account_data;
+Account* get_current_account(void) {
+    return &current_account;
 }
 
 // Keccak-256 implementation
