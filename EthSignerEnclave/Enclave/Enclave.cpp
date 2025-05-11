@@ -157,29 +157,11 @@ sgx_status_t generate_entropy(uint8_t* entropy, size_t size) {
         return SGX_ERROR_INVALID_PARAMETER;
     }
 
-    // Generate initial random data
-    uint8_t initial_data[128];
-    sgx_status_t status = sgx_read_rand(initial_data, sizeof(initial_data));
+    // Generate random data directly from SGX RNG
+    sgx_status_t status = sgx_read_rand(entropy, size);
     if (status != SGX_SUCCESS) {
         return status;
     }
-
-    // First SHA-256 hash
-    sgx_sha256_hash_t first_hash;
-    status = sgx_sha256_msg(initial_data, sizeof(initial_data), &first_hash);
-    if (status != SGX_SUCCESS) {
-        return status;
-    }
-
-    // Second SHA-256 hash
-    sgx_sha256_hash_t second_hash;
-    status = sgx_sha256_msg(first_hash, sizeof(first_hash), &second_hash);
-    if (status != SGX_SUCCESS) {
-        return status;
-    }
-
-    // Copy the final hash to the output
-    memcpy(entropy, second_hash, size);
 
     return SGX_SUCCESS;
 }
@@ -193,7 +175,7 @@ sgx_status_t generate_secure_private_key(uint8_t* private_key, size_t size) {
         return SGX_ERROR_INVALID_PARAMETER;
     }
     
-    // Generate initial entropy
+    // Step 1: Generate entropy
     uint8_t entropy[128];
     sgx_status_t status = generate_entropy(entropy, sizeof(entropy));
     if (status != SGX_SUCCESS) {
@@ -202,16 +184,36 @@ sgx_status_t generate_secure_private_key(uint8_t* private_key, size_t size) {
     }
     printf("Generated initial entropy\n");
     
-    // Hash the entropy to get a 32-byte private key
-    sgx_sha256_hash_t hash;
-    status = sgx_sha256_msg(entropy, sizeof(entropy), &hash);
+    // Step 2: Extract PRK using SHA-256 (HKDF-Extract)
+    sgx_sha256_hash_t prk;
+    status = sgx_sha256_msg(entropy, sizeof(entropy), &prk);
     if (status != SGX_SUCCESS) {
-        printf("Failed to hash entropy: %d\n", status);
+        printf("Failed to extract PRK: %d\n", status);
         return status;
     }
+    printf("PRK extracted\n");
     
-    // Copy the hash to the private key
-    memcpy(private_key, hash, size);
+    // Step 3: Expand PRK with info string (HKDF-Expand)
+    const char* info = "keygen";
+    size_t info_len = strlen(info);
+    
+    // Prepare expand input: PRK || info || 0x01
+    uint8_t expand_input[32 + 32 + 1] = {0};
+    memcpy(expand_input, prk, 32);
+    memcpy(expand_input + 32, info, info_len);
+    expand_input[32 + info_len] = 0x01;
+    
+    // Generate final key using SHA-256
+    sgx_sha256_hash_t final_hash;
+    status = sgx_sha256_msg(expand_input, 32 + info_len + 1, &final_hash);
+    if (status != SGX_SUCCESS) {
+        printf("Failed to expand key: %d\n", status);
+        return status;
+    }
+    printf("Key expanded successfully\n");
+    
+    // Copy the final hash to the private key
+    memcpy(private_key, final_hash, 32);
     
     // Verify key strength
     if (is_strong_private_key(private_key, size)) {
