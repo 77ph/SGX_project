@@ -50,11 +50,11 @@ static Account current_account = {0};
 static AccountData current_account_data = {0};
 
 // Глобальная переменная для хранения приватного ключа
-static uint8_t stored_private_key[32] = {0};
-static bool is_key_stored = false;
+// static uint8_t stored_private_key[32] = {0};
+// static bool is_key_stored = false;
 
 // Глобальный пул аккаунтов
-static AccountPool account_pool = {0};
+// static AccountPool account_pool = {0};
 
 // Security constants
 // MIN_ENTROPY_BITS is defined in Enclave.h
@@ -235,6 +235,7 @@ AccountData* get_current_account(void) {
 }
 
 // Helper function to add account to pool
+/*
 bool add_account_to_pool(const char* account_id, const AccountData& account) {
     if (!account_id) return false;
     
@@ -257,6 +258,7 @@ bool add_account_to_pool(const char* account_id, const AccountData& account) {
     
     return true;
 }
+*/
 
 // Keccak-256 implementation
 void keccak_256(const uint8_t* input, size_t input_len, uint8_t* output) {
@@ -605,105 +607,6 @@ int ecall_sign_message(const uint8_t* message, size_t message_len, uint8_t* sign
     return 0;
 }
 
-// Функции для работы с пулом аккаунтов
-int ecall_load_account_to_pool(const char* account_id) {
-    if (!account_id || strlen(account_id) >= MAX_ACCOUNT_ID_LEN) {
-        return -1;
-    }
-
-    // Поиск свободного слота
-    int free_slot = -1;
-    for (int i = 0; i < MAX_POOL_SIZE; i++) {
-        if (!account_pool.accounts[i].is_loaded) {
-            free_slot = i;
-            break;
-        }
-    }
-
-    if (free_slot == -1) {
-        return -1; // Пул полон
-    }
-
-    // Загрузка аккаунта
-    if (ecall_load_account(account_id) != 0) {
-        return -1;
-    }
-
-    // Копирование данных в пул
-    memcpy(&account_pool.accounts[free_slot].account, &current_account, sizeof(Account));
-    memcpy(account_pool.accounts[free_slot].account_id, account_id, strlen(account_id) + 1);
-    account_pool.accounts[free_slot].is_loaded = true;
-
-    return free_slot;
-}
-
-int ecall_unload_account_from_pool(const char* account_id) {
-    if (!account_id) {
-        return -1;
-    }
-
-    // Поиск аккаунта в пуле
-    int account_index = -1;
-    for (int i = 0; i < MAX_POOL_SIZE; i++) {
-        if (account_pool.accounts[i].is_loaded && strcmp(account_pool.accounts[i].account_id, account_id) == 0) {
-            account_index = i;
-            break;
-        }
-    }
-
-    if (account_index == -1) {
-        return -1; // Аккаунт не найден
-    }
-
-    // Очистка данных
-    secure_memzero(&account_pool.accounts[account_index].account, sizeof(Account));
-    secure_memzero(account_pool.accounts[account_index].account_id, MAX_ACCOUNT_ID_LEN);
-    account_pool.accounts[account_index].is_loaded = false;
-
-    return 0;
-}
-
-int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message, size_t message_len, uint8_t* signature, size_t signature_len) {
-    if (!account_id || !message || !signature || message_len == 0 || signature_len < 64) {
-        return -1;
-    }
-
-    // Поиск аккаунта в пуле
-    int account_index = -1;
-    for (int i = 0; i < MAX_POOL_SIZE; i++) {
-        if (account_pool.accounts[i].is_loaded && strcmp(account_pool.accounts[i].account_id, account_id) == 0) {
-            account_index = i;
-            break;
-        }
-    }
-
-    if (account_index == -1) {
-        return -1; // Аккаунт не найден
-    }
-
-    // Создание контекста secp256k1
-    secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
-    if (!ctx) {
-        return -1;
-    }
-
-    // Создание подписи
-    secp256k1_ecdsa_signature sig;
-    if (!secp256k1_ecdsa_sign(ctx, &sig, message, account_pool.accounts[account_index].account.private_key, NULL, NULL)) {
-        secp256k1_context_destroy(ctx);
-        return -1;
-    }
-
-    // Сериализация подписи
-    if (!secp256k1_ecdsa_signature_serialize_compact(ctx, signature, &sig)) {
-        secp256k1_context_destroy(ctx);
-        return -1;
-    }
-
-    secp256k1_context_destroy(ctx);
-    return 0;
-}
-
 // Test function
 int ecall_test_function() {
     return 0;
@@ -717,85 +620,52 @@ int ecall_generate_private_key(uint8_t* private_key, size_t private_key_size) {
     return generate_secure_private_key(private_key, private_key_size) == SGX_SUCCESS ? 0 : -1;
 }
 
-// Store private key in enclave
+// Stub implementations for functions still declared in Enclave.edl
 int ecall_store_private_key(const uint8_t* private_key, size_t private_key_size) {
-    if (!private_key || private_key_size != 32) {
-        return -1;
-    }
-    memcpy(current_account.private_key, private_key, 32);
-    current_account.is_initialized = true;
-    return 0;
+    printf("WARNING: ecall_store_private_key is deprecated\n");
+    return -1;
 }
 
-// Sign with stored key
 int ecall_sign_with_stored_key(const uint8_t* tx_hash, size_t tx_hash_size,
                              uint8_t* signature, size_t signature_size) {
-    if (!current_account.is_initialized) {
-        return -1;
-    }
-    return ecall_sign_transaction(tx_hash, tx_hash_size, signature, signature_size);
-}
-
-// Account state management
-int ecall_save_account_state() {
-    printf("Saving account state...\n");
-    if (!current_account.is_initialized) {
-        printf("Error: No account to save\n");
-        return -1;
-    }
-    printf("Account is initialized, saving...\n");
-    return ecall_save_account("default");
-}
-
-int ecall_load_account_state() {
-    printf("Loading account state...\n");
-    int result = ecall_load_account("default");
-    if (result == 0) {
-        printf("Account loaded successfully\n");
-        printf("Account initialized: %s\n", current_account.is_initialized ? "yes" : "no");
-        if (current_account.is_initialized) {
-            printf("First 8 bytes of private key: ");
-            for (int i = 0; i < 8; i++) {
-                printf("%02x ", current_account.private_key[i]);
-            }
-            printf("\n");
-        }
-    } else {
-        printf("Failed to load account\n");
-    }
-    return result;
+    printf("WARNING: ecall_sign_with_stored_key is deprecated\n");
+    return -1;
 }
 
 int ecall_sign_with_account(const uint8_t* message_hash, size_t message_hash_len,
                           uint8_t* signature, size_t signature_len) {
-    return ecall_sign_transaction(message_hash, message_hash_len, signature, signature_len);
+    printf("WARNING: ecall_sign_with_account is deprecated\n");
+    return -1;
 }
 
-// Account pool management
 int ecall_init_account_pool() {
-    secure_memzero(&account_pool, sizeof(AccountPool));
-    return 0;
+    printf("WARNING: ecall_init_account_pool is deprecated\n");
+    return -1;
+}
+
+int ecall_load_account_to_pool(const char* account_id) {
+    printf("WARNING: ecall_load_account_to_pool is deprecated\n");
+    return -1;
+}
+
+int ecall_unload_account_from_pool(const char* account_id) {
+    printf("WARNING: ecall_unload_account_from_pool is deprecated\n");
+    return -1;
+}
+
+int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message, size_t message_len, uint8_t* signature, size_t signature_len) {
+    printf("WARNING: ecall_sign_with_pool_account is deprecated\n");
+    return -1;
 }
 
 int ecall_get_pool_status(uint32_t* total_accounts, uint32_t* active_accounts) {
-    if (!total_accounts || !active_accounts) {
-        return -1;
-    }
-    *total_accounts = MAX_POOL_SIZE;
-    *active_accounts = 0;
-    for (int i = 0; i < MAX_POOL_SIZE; i++) {
-        if (account_pool.accounts[i].is_loaded) {
-            (*active_accounts)++;
-        }
-    }
-    return 0;
+    printf("WARNING: ecall_get_pool_status is deprecated\n");
+    return -1;
 }
 
 int ecall_save_test_account() {
-    if (ecall_generate_account() != 0) {
-        return -1;
-    }
-    return ecall_save_account("test");
+    printf("WARNING: ecall_save_test_account is deprecated\n");
+    return -1;
 }
 
 // Test functions
