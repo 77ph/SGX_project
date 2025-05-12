@@ -718,6 +718,62 @@ static int test_load_account_to_pool() {
     return 0;
 }
 
+// Test function for ecall_unload_account_from_pool
+static int test_unload_account_from_pool() {
+    printf("\nTesting ecall_unload_account_from_pool...\n");
+    
+    // Test 1: Unload with null account_id
+    int result = ecall_unload_account_from_pool(NULL);
+    printf("Test 1 (null account_id): result = %d (expected -1)\n", result);
+    
+    // Test 2: Unload non-existent account
+    result = ecall_unload_account_from_pool("0x0000000000000000000000000000000000000000");
+    printf("Test 2 (unload non-existent): result = %d (expected -1)\n", result);
+    
+    // Test 3: Generate, load and unload test account
+    printf("\nTest 3: Generate, load and unload test account...\n");
+    if (ecall_generate_account() != 0) {
+        printf("Failed to generate test account\n");
+        return -1;
+    }
+    
+    // Save account to get its address
+    if (ecall_save_account("default") != 0) {
+        printf("Failed to save test account\n");
+        return -1;
+    }
+    
+    // Load account to pool
+    char account_id[43]; // 0x + 40 hex chars + null terminator
+    snprintf(account_id, sizeof(account_id), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+             current_account.address[0], current_account.address[1], current_account.address[2], current_account.address[3],
+             current_account.address[4], current_account.address[5], current_account.address[6], current_account.address[7],
+             current_account.address[8], current_account.address[9], current_account.address[10], current_account.address[11],
+             current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
+             current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
+    
+    if (ecall_load_account_to_pool(account_id) < 0) {
+        printf("Failed to load account to pool\n");
+        return -1;
+    }
+    
+    // Unload account
+    result = ecall_unload_account_from_pool(account_id);
+    printf("Test 3 (unload account): result = %d (expected 0)\n", result);
+    if (result != 0) {
+        return -1;
+    }
+    
+    // Verify account was unloaded
+    if (find_account_in_pool((const uint8_t*)account_id) != -1) {
+        printf("Account still found in pool after unload\n");
+        return -1;
+    }
+    
+    printf("\nTest cleanup completed\n");
+    return 0;
+}
+
 // Update ecall_test_function to include new test
 int ecall_test_function() {
     printf("Running test suite...\n");
@@ -735,6 +791,13 @@ int ecall_test_function() {
         return -1;
     }
     printf("load_account_to_pool test passed\n");
+    
+    // Test unload_account_from_pool
+    if (test_unload_account_from_pool() != 0) {
+        printf("unload_account_from_pool test failed\n");
+        return -1;
+    }
+    printf("unload_account_from_pool test passed\n");
     
     return 0;
 }
@@ -819,8 +882,46 @@ int ecall_load_account_to_pool(const char* account_id) {
 }
 
 int ecall_unload_account_from_pool(const char* account_id) {
-    printf("WARNING: ecall_unload_account_from_pool is deprecated\n");
-    return -1;
+    printf("Unloading account %s from pool...\n", account_id);
+    
+    if (!account_id) {
+        printf("Invalid account ID\n");
+        return -1;
+    }
+
+    // Convert hex string to bytes
+    uint8_t address[20];
+    if (strlen(account_id) != 42 || account_id[0] != '0' || account_id[1] != 'x') {
+        printf("Invalid account ID format\n");
+        return -1;
+    }
+    
+    for (int i = 0; i < 20; i++) {
+        char byte_str[3] = {account_id[2 + i*2], account_id[2 + i*2 + 1], 0};
+        address[i] = (uint8_t)strtol(byte_str, NULL, 16);
+    }
+
+    // Find account in pool
+    int pool_index = find_account_in_pool(address);
+    if (pool_index == -1) {
+        printf("Account not found in pool\n");
+        return -1;
+    }
+    printf("Found account at pool index %d\n", pool_index);
+
+    // Securely clear the slot
+    secure_memzero(&account_pool.accounts[pool_index].account, sizeof(Account));
+    account_pool.accounts[pool_index].use_count = 0;
+    printf("Account slot cleared at index %d\n", pool_index);
+
+    // Verify account was removed
+    if (find_account_in_pool(address) != -1) {
+        printf("Failed to verify account removal\n");
+        return -1;
+    }
+
+    printf("Account successfully unloaded from pool\n");
+    return 0;
 }
 
 int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message, size_t message_len, uint8_t* signature, size_t signature_len) {
