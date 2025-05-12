@@ -922,6 +922,96 @@ static int test_sign_with_pool_account() {
     return 0;
 }
 
+static int test_get_pool_status() {
+    printf("\nTesting get_pool_status...\n");
+    
+    // Clear pool before testing
+    for (int i = 0; i < MAX_POOL_SIZE; i++) {
+        secure_memzero(&account_pool.accounts[i].account, sizeof(Account));
+        account_pool.accounts[i].use_count = 0;
+    }
+    printf("Pool cleared before testing\n");
+    
+    // Test 1: Get status with null parameters
+    int result = ecall_get_pool_status(NULL, NULL);
+    printf("Test 1 (null parameters): result = %d (expected -1)\n", result);
+    
+    // Test 2: Get status of empty pool
+    uint32_t total_accounts = 0;
+    uint32_t active_accounts = 0;
+    result = ecall_get_pool_status(&total_accounts, &active_accounts);
+    printf("Test 2 (empty pool): result = %d (expected 0), total=%u, active=%u\n", 
+           result, total_accounts, active_accounts);
+    if (result != 0 || total_accounts != 0 || active_accounts != 0) {
+        return -1;
+    }
+    
+    // Test 3: Generate and load test account
+    printf("\nTest 3: Generate and load test account...\n");
+    if (ecall_generate_account() != 0) {
+        printf("Failed to generate test account\n");
+        return -1;
+    }
+    
+    // Save account to get its address
+    if (ecall_save_account("default") != 0) {
+        printf("Failed to save test account\n");
+        return -1;
+    }
+    
+    // Create account_id from address
+    char account_id[43]; // 0x + 40 hex chars + null terminator
+    snprintf(account_id, sizeof(account_id), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+             current_account.address[0], current_account.address[1], current_account.address[2], current_account.address[3],
+             current_account.address[4], current_account.address[5], current_account.address[6], current_account.address[7],
+             current_account.address[8], current_account.address[9], current_account.address[10], current_account.address[11],
+             current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
+             current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
+    
+    // Load account to pool
+    int pool_index = ecall_load_account_to_pool(account_id);
+    if (pool_index < 0) {
+        printf("Failed to load account to pool\n");
+        return -1;
+    }
+    
+    // Get status after loading
+    result = ecall_get_pool_status(&total_accounts, &active_accounts);
+    printf("Test 3 (after loading): result = %d (expected 0), total=%u, active=%u\n", 
+           result, total_accounts, active_accounts);
+    if (result != 0 || total_accounts != 1 || active_accounts != 0) {
+        return -1;
+    }
+    
+    // Test 4: Sign message to make account active
+    uint8_t test_message[32] = {0};
+    uint8_t test_signature[64] = {0};
+    for (int i = 0; i < sizeof(test_message); i++) {
+        test_message[i] = i;  // Simple test pattern
+    }
+    
+    result = ecall_sign_with_pool_account(account_id, test_message, sizeof(test_message), test_signature, sizeof(test_signature));
+    if (result != 0) {
+        printf("Failed to sign message\n");
+        return -1;
+    }
+    
+    // Get status after signing
+    result = ecall_get_pool_status(&total_accounts, &active_accounts);
+    printf("Test 4 (after signing): result = %d (expected 0), total=%u, active=%u\n", 
+           result, total_accounts, active_accounts);
+    if (result != 0 || total_accounts != 1 || active_accounts != 1) {
+        return -1;
+    }
+    
+    // Cleanup
+    secure_memzero(&account_pool.accounts[pool_index].account, sizeof(Account));
+    account_pool.accounts[pool_index].use_count = 0;
+    printf("\nTest cleanup completed\n");
+    
+    return 0;
+}
+
 int ecall_test_function() {
     printf("Running test suite...\n");
     
@@ -959,6 +1049,13 @@ int ecall_test_function() {
         return -1;
     }
     printf("sign_with_pool_account test passed\n");
+    
+    // Test get_pool_status
+    if (test_get_pool_status() != 0) {
+        printf("get_pool_status test failed\n");
+        return -1;
+    }
+    printf("get_pool_status test passed\n");
     
     return 0;
 }
@@ -1149,8 +1246,28 @@ int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message,
 }
 
 int ecall_get_pool_status(uint32_t* total_accounts, uint32_t* active_accounts) {
-    printf("WARNING: ecall_get_pool_status is deprecated\n");
-    return -1;
+    printf("Getting pool status...\n");
+    
+    if (!total_accounts || !active_accounts) {
+        printf("Invalid parameters: total_accounts=%p, active_accounts=%p\n", total_accounts, active_accounts);
+        return -1;
+    }
+
+    // Count total and active accounts
+    *total_accounts = 0;
+    *active_accounts = 0;
+    
+    for (int i = 0; i < MAX_POOL_SIZE; i++) {
+        if (account_pool.accounts[i].account.is_initialized) {
+            (*total_accounts)++;
+            if (account_pool.accounts[i].use_count > 0) {
+                (*active_accounts)++;
+            }
+        }
+    }
+    
+    printf("Pool status: total accounts=%u, active accounts=%u\n", *total_accounts, *active_accounts);
+    return 0;
 }
 
 int ecall_save_test_account() {
