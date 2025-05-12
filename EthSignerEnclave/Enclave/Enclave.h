@@ -58,6 +58,7 @@ typedef struct {
     uint8_t public_key[65];
     uint8_t address[20];
     uint8_t hmac[32];
+    uint32_t use_count;    // счетчик использований (подписей)
     bool is_initialized;
 } Account;
 
@@ -69,7 +70,6 @@ typedef struct {
 // Структура для хранения аккаунта в пуле
 typedef struct {
     Account account;
-    uint32_t use_count;    // счетчик использований (подписей)
 } PoolAccount;
 
 // Структура для хранения пула аккаунтов

@@ -57,7 +57,7 @@ static bool initialize_account_pool() {
     
     // Initialize all slots as free
     for (int i = 0; i < MAX_POOL_SIZE; i++) {
-        account_pool.accounts[i].use_count = 0;
+        account_pool.accounts[i].account.use_count = 0;
         secure_memzero(&account_pool.accounts[i].account, sizeof(Account));
     }
     
@@ -275,7 +275,7 @@ int ecall_generate_account(void) {
         return -1;
     }
     printf("Private key generated successfully\n");
-    
+
     // Generate public key from private key
     secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
     if (!ctx) {
@@ -310,6 +310,7 @@ int ecall_generate_account(void) {
     memcpy(current_account.private_key, private_key, sizeof(private_key));
     memcpy(current_account.public_key, serialized_pubkey, sizeof(serialized_pubkey));
     memcpy(current_account.address, address, sizeof(address));
+    current_account.use_count = 0;  // Initialize use_count to 0
     current_account.is_initialized = true;
     printf("Account data stored\n");
     
@@ -320,7 +321,7 @@ int ecall_generate_account(void) {
         return -1;
     }
     printf("HMAC calculated\n");
-    
+
     secp256k1_context_destroy(ctx);
     
     // Save account state immediately
@@ -378,6 +379,19 @@ int ecall_sign_transaction(const uint8_t* tx_hash, size_t tx_hash_size,
         return -1;
     }
     printf("Signature serialized\n");
+
+    // Increment use count
+    current_account.use_count++;
+    printf("Use count incremented to %u\n", current_account.use_count);
+
+    // Save account state to persist use_count
+    int save_result = ecall_save_account("default");
+    if (save_result != 0) {
+        printf("Failed to save account state after signing\n");
+        secp256k1_context_destroy(ctx);
+        return -1;
+    }
+    printf("Account state saved after signing\n");
     
     secp256k1_context_destroy(ctx);
     printf("Transaction signing completed successfully\n");
@@ -599,6 +613,19 @@ int ecall_sign_message(const uint8_t* message, size_t message_len, uint8_t* sign
     }
     printf("Signature serialized\n");
 
+    // Increment use count
+    current_account.use_count++;
+    printf("Use count incremented to %u\n", current_account.use_count);
+
+    // Save account state to persist use_count
+    int save_result = ecall_save_account("default");
+    if (save_result != 0) {
+        printf("Failed to save account state after signing\n");
+        secp256k1_context_destroy(ctx);
+        return -1;
+    }
+    printf("Account state saved after signing\n");
+
     secp256k1_context_destroy(ctx);
     printf("Message signing completed successfully\n");
     return 0;
@@ -642,7 +669,7 @@ static int test_find_account_in_pool() {
     
     // Add to pool at index 0
     memcpy(&account_pool.accounts[0].account, &current_account, sizeof(Account));
-    account_pool.accounts[0].use_count = 0;
+    account_pool.accounts[0].account.use_count = 0;
     printf("Test account added to pool at index 0\n");
     
     // Test 3: Find existing account
@@ -660,7 +687,7 @@ static int test_find_account_in_pool() {
     
     // Cleanup
     secure_memzero(&account_pool.accounts[0].account, sizeof(Account));
-    account_pool.accounts[0].use_count = 0;
+    account_pool.accounts[0].account.use_count = 0;
     printf("\nTest cleanup completed\n");
     
     return 0;
@@ -712,7 +739,7 @@ static int test_load_account_to_pool() {
     
     // Cleanup
     secure_memzero(&account_pool.accounts[0].account, sizeof(Account));
-    account_pool.accounts[0].use_count = 0;
+    account_pool.accounts[0].account.use_count = 0;
     printf("\nTest cleanup completed\n");
     
     return 0;
@@ -815,8 +842,8 @@ static int test_generate_account_in_pool() {
     printf("Test 3 (verify account): passed\n");
 
     // Test 4: Verify use count
-    if (account_pool.accounts[pool_index].use_count != 0) {
-        printf("Test 4 (verify use count): failed - use count is %d\n", account_pool.accounts[pool_index].use_count);
+    if (account_pool.accounts[pool_index].account.use_count != 0) {
+        printf("Test 4 (verify use count): failed - use count is %d\n", account_pool.accounts[pool_index].account.use_count);
         return -4;
     }
     printf("Test 4 (verify use count): passed\n");
@@ -861,6 +888,13 @@ static int test_sign_with_pool_account() {
         printf("Failed to load account to pool\n");
         return -1;
     }
+
+    // Verify initial use_count
+    if (account_pool.accounts[pool_index].account.use_count != 0) {
+        printf("Initial use_count is not 0: %u\n", account_pool.accounts[pool_index].account.use_count);
+        return -1;
+    }
+    printf("Initial use_count verified\n");
     
     // Create test message
     for (int i = 0; i < sizeof(test_message); i++) {
@@ -873,6 +907,13 @@ static int test_sign_with_pool_account() {
     if (result != 0) {
         return -1;
     }
+
+    // Verify use_count was incremented
+    if (account_pool.accounts[pool_index].account.use_count != 1) {
+        printf("use_count not incremented after signing: %u\n", account_pool.accounts[pool_index].account.use_count);
+        return -1;
+    }
+    printf("use_count verified after signing\n");
     
     // Test 3: Verify signature
     secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
@@ -888,7 +929,7 @@ static int test_sign_with_pool_account() {
         secp256k1_context_destroy(ctx);
         return -1;
     }
-    
+
     // Parse public key
     secp256k1_pubkey pubkey;
     if (!secp256k1_ec_pubkey_parse(ctx, &pubkey, account_pool.accounts[pool_index].account.public_key, sizeof(account_pool.accounts[pool_index].account.public_key))) {
@@ -907,16 +948,9 @@ static int test_sign_with_pool_account() {
     
     secp256k1_context_destroy(ctx);
     
-    // Test 4: Verify use count
-    if (account_pool.accounts[pool_index].use_count != 1) {
-        printf("Test 4 (verify use count): failed - use count is %d\n", account_pool.accounts[pool_index].use_count);
-        return -1;
-    }
-    printf("Test 4 (verify use count): passed\n");
-    
     // Cleanup
     secure_memzero(&account_pool.accounts[pool_index].account, sizeof(Account));
-    account_pool.accounts[pool_index].use_count = 0;
+    account_pool.accounts[pool_index].account.is_initialized = false;
     printf("\nTest cleanup completed\n");
     
     return 0;
@@ -928,7 +962,7 @@ static int test_get_pool_status() {
     // Clear pool before testing
     for (int i = 0; i < MAX_POOL_SIZE; i++) {
         secure_memzero(&account_pool.accounts[i].account, sizeof(Account));
-        account_pool.accounts[i].use_count = 0;
+        account_pool.accounts[i].account.is_initialized = false;
     }
     printf("Pool cleared before testing\n");
     
@@ -945,7 +979,7 @@ static int test_get_pool_status() {
     if (result != 0 || total_accounts != 0 || active_accounts != 0) {
         return -1;
     }
-    
+
     // Test 3: Generate and load test account
     printf("\nTest 3: Generate and load test account...\n");
     if (ecall_generate_account() != 0) {
@@ -974,6 +1008,13 @@ static int test_get_pool_status() {
         printf("Failed to load account to pool\n");
         return -1;
     }
+
+    // Verify initial use_count
+    if (account_pool.accounts[pool_index].account.use_count != 0) {
+        printf("Initial use_count is not 0: %u\n", account_pool.accounts[pool_index].account.use_count);
+        return -1;
+    }
+    printf("Initial use_count verified\n");
     
     // Get status after loading
     result = ecall_get_pool_status(&total_accounts, &active_accounts);
@@ -995,6 +1036,13 @@ static int test_get_pool_status() {
         printf("Failed to sign message\n");
         return -1;
     }
+
+    // Verify use_count was incremented
+    if (account_pool.accounts[pool_index].account.use_count != 1) {
+        printf("use_count not incremented after signing: %u\n", account_pool.accounts[pool_index].account.use_count);
+        return -1;
+    }
+    printf("use_count verified after signing\n");
     
     // Get status after signing
     result = ecall_get_pool_status(&total_accounts, &active_accounts);
@@ -1003,11 +1051,100 @@ static int test_get_pool_status() {
     if (result != 0 || total_accounts != 1 || active_accounts != 1) {
         return -1;
     }
-    
+
     // Cleanup
     secure_memzero(&account_pool.accounts[pool_index].account, sizeof(Account));
-    account_pool.accounts[pool_index].use_count = 0;
+    account_pool.accounts[pool_index].account.is_initialized = false;
     printf("\nTest cleanup completed\n");
+    
+    return 0;
+}
+
+static int test_use_count_persistence() {
+    printf("\nTesting use_count persistence...\n");
+    
+    // Test 1: Generate account
+    if (ecall_generate_account() != 0) {
+        printf("Failed to generate test account\n");
+        return -1;
+    }
+    printf("Test account generated\n");
+    
+    // Verify initial use_count
+    if (current_account.use_count != 0) {
+        printf("Initial use_count is not 0: %u\n", current_account.use_count);
+        return -1;
+    }
+    printf("Initial use_count verified\n");
+    
+    // Create account_id from address
+    char account_id[43]; // 0x + 40 hex chars + null terminator
+    snprintf(account_id, sizeof(account_id), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+             current_account.address[0], current_account.address[1], current_account.address[2], current_account.address[3],
+             current_account.address[4], current_account.address[5], current_account.address[6], current_account.address[7],
+             current_account.address[8], current_account.address[9], current_account.address[10], current_account.address[11],
+             current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
+             current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
+    
+    // Sign a message to increment use_count
+    uint8_t test_message[32] = {0};
+    uint8_t test_signature[64] = {0};
+    for (int i = 0; i < sizeof(test_message); i++) {
+        test_message[i] = i;  // Simple test pattern
+    }
+    
+    if (ecall_sign_message(test_message, sizeof(test_message), test_signature, sizeof(test_signature)) != 0) {
+        printf("Failed to sign message\n");
+        return -1;
+    }
+    printf("Message signed\n");
+    
+    // Verify use_count was incremented
+    if (current_account.use_count != 1) {
+        printf("use_count not incremented after signing: %u\n", current_account.use_count);
+        return -1;
+    }
+    printf("use_count verified after signing\n");
+    
+    // Save account
+    if (ecall_save_account(account_id) != 0) {
+        printf("Failed to save account\n");
+        return -1;
+    }
+    printf("Account saved\n");
+    
+    // Clear current account
+    secure_memzero(&current_account, sizeof(Account));
+    current_account.is_initialized = false;
+    printf("Current account cleared\n");
+    
+    // Load account
+    if (ecall_load_account(account_id) != 0) {
+        printf("Failed to load account\n");
+        return -1;
+    }
+    printf("Account loaded\n");
+    
+    // Verify use_count was preserved
+    if (current_account.use_count != 1) {
+        printf("use_count not preserved after load: %u\n", current_account.use_count);
+        return -1;
+    }
+    printf("use_count verified after load\n");
+    
+    // Sign another message
+    if (ecall_sign_message(test_message, sizeof(test_message), test_signature, sizeof(test_signature)) != 0) {
+        printf("Failed to sign second message\n");
+        return -1;
+    }
+    printf("Second message signed\n");
+    
+    // Verify use_count was incremented again
+    if (current_account.use_count != 2) {
+        printf("use_count not incremented after second signing: %u\n", current_account.use_count);
+        return -1;
+    }
+    printf("use_count verified after second signing\n");
     
     return 0;
 }
@@ -1056,6 +1193,13 @@ int ecall_test_function() {
         return -1;
     }
     printf("get_pool_status test passed\n");
+    
+    // Test use_count persistence
+    if (test_use_count_persistence() != 0) {
+        printf("use_count_persistence test failed\n");
+        return -1;
+    }
+    printf("use_count_persistence test passed\n");
     
     return 0;
 }
@@ -1124,14 +1268,14 @@ int ecall_load_account_to_pool(const char* account_id) {
 
     // Copy account to pool
     memcpy(&account_pool.accounts[free_slot].account, &current_account, sizeof(Account));
-    account_pool.accounts[free_slot].use_count = 0;
+    account_pool.accounts[free_slot].account.use_count = 0;
     printf("Account copied to pool at index %d\n", free_slot);
 
     // Verify account was added correctly
     if (find_account_in_pool(current_account.address) != free_slot) {
         printf("Failed to verify account in pool\n");
         secure_memzero(&account_pool.accounts[free_slot].account, sizeof(Account));
-        account_pool.accounts[free_slot].use_count = 0;
+        account_pool.accounts[free_slot].account.use_count = 0;
         return -1;
     }
 
@@ -1169,7 +1313,7 @@ int ecall_unload_account_from_pool(const char* account_id) {
 
     // Securely clear the slot
     secure_memzero(&account_pool.accounts[pool_index].account, sizeof(Account));
-    account_pool.accounts[pool_index].use_count = 0;
+    account_pool.accounts[pool_index].account.use_count = 0;
     printf("Account slot cleared at index %d\n", pool_index);
 
     // Verify account was removed
@@ -1236,9 +1380,18 @@ int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message,
     }
     printf("Signature serialized\n");
 
-    // Increment use count
-    account_pool.accounts[pool_index].use_count++;
-    printf("Use count incremented to %d\n", account_pool.accounts[pool_index].use_count);
+    // Increment use count in Account
+    account_pool.accounts[pool_index].account.use_count++;
+    printf("Use count incremented to %u\n", account_pool.accounts[pool_index].account.use_count);
+
+    // Save account state to persist use_count
+    int save_result = ecall_save_account(account_id);
+    if (save_result != 0) {
+        printf("Failed to save account state after signing\n");
+        secp256k1_context_destroy(ctx);
+        return -1;
+    }
+    printf("Account state saved after signing\n");
 
     secp256k1_context_destroy(ctx);
     printf("Message signing completed successfully\n");
@@ -1260,7 +1413,7 @@ int ecall_get_pool_status(uint32_t* total_accounts, uint32_t* active_accounts) {
     for (int i = 0; i < MAX_POOL_SIZE; i++) {
         if (account_pool.accounts[i].account.is_initialized) {
             (*total_accounts)++;
-            if (account_pool.accounts[i].use_count > 0) {
+            if (account_pool.accounts[i].account.use_count > 0) {
                 (*active_accounts)++;
             }
         }
@@ -1354,6 +1507,13 @@ int ecall_test_sign_verify(void) {
         printf("Test account generated\n");
     }
     
+    // Verify initial use_count
+    if (current_account.use_count != 0) {
+        printf("Initial use_count is not 0: %u\n", current_account.use_count);
+        return -1;
+    }
+    printf("Initial use_count verified\n");
+    
     // Create test transaction hash
     uint8_t tx_hash[32];
     for (int i = 0; i < 32; i++) {
@@ -1369,6 +1529,13 @@ int ecall_test_sign_verify(void) {
     }
     printf("Test transaction signed\n");
     
+    // Verify use_count was incremented
+    if (current_account.use_count != 1) {
+        printf("use_count not incremented after signing: %u\n", current_account.use_count);
+        return -1;
+    }
+    printf("use_count verified after signing\n");
+    
     // Create verification context
     secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
     if (!ctx) {
@@ -1376,7 +1543,7 @@ int ecall_test_sign_verify(void) {
         return -1;
     }
     printf("Verification context created\n");
-    
+
     // Parse signature
     secp256k1_ecdsa_signature sig;
     if (!secp256k1_ecdsa_signature_parse_compact(ctx, &sig, signature)) {
@@ -1394,7 +1561,7 @@ int ecall_test_sign_verify(void) {
         return -1;
     }
     printf("Public key parsed\n");
-    
+
     // Verify signature
     if (!secp256k1_ecdsa_verify(ctx, &sig, tx_hash, &pubkey)) {
         printf("Signature verification failed\n");
