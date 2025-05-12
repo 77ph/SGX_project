@@ -12,6 +12,8 @@
 #include <assert.h>
 #include <unistd.h>
 #include <pwd.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #define BUFLEN 2048
 #define MAXPATHLEN 255
@@ -19,6 +21,25 @@
 
 /* Global EID shared by multiple threads */
 sgx_enclave_id_t global_eid = 0;
+
+// Глобальный флаг для тестового режима
+static bool g_is_test_mode = false;
+
+// Функции управления тестовым режимом
+void cleanup_test_accounts() {
+    // Удаляем все файлы из test_accounts
+    system("rm -f test_accounts/*");
+}
+
+void set_test_mode(bool is_test) {
+    g_is_test_mode = is_test;
+    if (is_test) {
+        // Создаем директорию test_accounts если её нет
+        mkdir("test_accounts", 0700);
+        // Очищаем старые тестовые аккаунты
+        cleanup_test_accounts();
+    }
+}
 
 // OCall functions
 void ocall_print(const char* str) {
@@ -36,9 +57,16 @@ int ocall_save_to_file(const uint8_t* data, size_t size, const char* filename) {
         return -1;
     }
 
-    FILE* file = fopen(filename, "wb");
+    char full_path[256];
+    if (g_is_test_mode) {
+        snprintf(full_path, sizeof(full_path), "test_accounts/%s", filename);
+    } else {
+        snprintf(full_path, sizeof(full_path), "accounts/%s", filename);
+    }
+
+    FILE* file = fopen(full_path, "wb");
     if (!file) {
-        printf("Error: Failed to open file %s for writing\n", filename);
+        printf("Error: Failed to open file %s for writing\n", full_path);
         return -1;
     }
 
@@ -46,7 +74,7 @@ int ocall_save_to_file(const uint8_t* data, size_t size, const char* filename) {
     fclose(file);
 
     if (written != size) {
-        printf("Error: Failed to write all data to file %s\n", filename);
+        printf("Error: Failed to write all data to file %s\n", full_path);
         return -1;
     }
 
@@ -59,9 +87,16 @@ int ocall_read_from_file(uint8_t* data, size_t size, const char* filename) {
         return -1;
     }
 
-    FILE* file = fopen(filename, "rb");
+    char full_path[256];
+    if (g_is_test_mode) {
+        snprintf(full_path, sizeof(full_path), "test_accounts/%s", filename);
+    } else {
+        snprintf(full_path, sizeof(full_path), "accounts/%s", filename);
+    }
+
+    FILE* file = fopen(full_path, "rb");
     if (!file) {
-        printf("Error: Failed to open file %s for reading\n", filename);
+        printf("Error: Failed to open file %s for reading\n", full_path);
         return -1;
     }
 
@@ -83,7 +118,7 @@ int ocall_read_from_file(uint8_t* data, size_t size, const char* filename) {
     fclose(file);
 
     if (read != size) {
-        printf("Error: Failed to read all data from file %s\n", filename);
+        printf("Error: Failed to read all data from file %s\n", full_path);
         return -1;
     }
 
@@ -129,6 +164,9 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    // Start in test mode for the global test suite
+    set_test_mode(true);
+
     // Test function call
     status = ecall_test_function(global_eid, &retval);
     if (status != SGX_SUCCESS || retval != 0) {
@@ -137,6 +175,12 @@ int main(int argc, char *argv[]) {
         return -1;
     }
     printf("Test function returned: %d\n\n", retval);
+
+    // Clean up test accounts after successful test completion
+    cleanup_test_accounts();
+
+    // Switch to normal mode after tests complete
+    set_test_mode(false);
 
     // Interactive mode
     char command[256];
@@ -150,6 +194,7 @@ int main(int argc, char *argv[]) {
     printf("  test_entropy - Test entropy generation\n");
     printf("  test_save_load - Test the save/load cycle\n");
     printf("  test_sign_verify - Test transaction signing and verification\n");
+    printf("  test_mode [on|off] - Enable/disable test mode\n");
     printf("  help - Show this help message\n");
     printf("  exit - Exit the application\n");
 
@@ -267,6 +312,17 @@ int main(int argc, char *argv[]) {
             }
             printf("Test sign/verify completed successfully\n");
         }
+        else if (strcmp(command, "test_mode") == 0) {
+            if (strcmp(arg, "on") == 0) {
+                set_test_mode(true);
+                printf("Test mode enabled\n");
+            } else if (strcmp(arg, "off") == 0) {
+                set_test_mode(false);
+                printf("Test mode disabled\n");
+            } else {
+                printf("Usage: test_mode [on|off]\n");
+            }
+        }
         else if (strcmp(command, "help") == 0) {
             printf("Available commands:\n");
             printf("  generate_account - Generate a new Ethereum account\n");
@@ -276,6 +332,7 @@ int main(int argc, char *argv[]) {
             printf("  test_entropy - Test entropy generation\n");
             printf("  test_save_load - Test the save/load cycle\n");
             printf("  test_sign_verify - Test transaction signing and verification\n");
+            printf("  test_mode [on|off] - Enable/disable test mode\n");
             printf("  help - Show this help message\n");
             printf("  exit - Exit the application\n");
         }
