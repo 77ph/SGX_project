@@ -824,6 +824,104 @@ static int test_generate_account_in_pool() {
     return 0;
 }
 
+static int test_sign_with_pool_account() {
+    printf("\nTesting sign_with_pool_account...\n");
+    
+    // Test 1: Sign with null account_id
+    uint8_t test_message[32] = {0};
+    uint8_t test_signature[64] = {0};
+    int result = ecall_sign_with_pool_account(NULL, test_message, sizeof(test_message), test_signature, sizeof(test_signature));
+    printf("Test 1 (null account_id): result = %d (expected -1)\n", result);
+    
+    // Test 2: Generate, load and sign with test account
+    printf("\nTest 2: Generate, load and sign with test account...\n");
+    if (ecall_generate_account() != 0) {
+        printf("Failed to generate test account\n");
+        return -1;
+    }
+    
+    // Save account to get its address
+    if (ecall_save_account("default") != 0) {
+        printf("Failed to save test account\n");
+        return -1;
+    }
+    
+    // Create account_id from address
+    char account_id[43]; // 0x + 40 hex chars + null terminator
+    snprintf(account_id, sizeof(account_id), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+             current_account.address[0], current_account.address[1], current_account.address[2], current_account.address[3],
+             current_account.address[4], current_account.address[5], current_account.address[6], current_account.address[7],
+             current_account.address[8], current_account.address[9], current_account.address[10], current_account.address[11],
+             current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
+             current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
+    
+    // Load account to pool
+    int pool_index = ecall_load_account_to_pool(account_id);
+    if (pool_index < 0) {
+        printf("Failed to load account to pool\n");
+        return -1;
+    }
+    
+    // Create test message
+    for (int i = 0; i < sizeof(test_message); i++) {
+        test_message[i] = i;  // Simple test pattern
+    }
+    
+    // Sign message
+    result = ecall_sign_with_pool_account(account_id, test_message, sizeof(test_message), test_signature, sizeof(test_signature));
+    printf("Test 2 (sign message): result = %d (expected 0)\n", result);
+    if (result != 0) {
+        return -1;
+    }
+    
+    // Test 3: Verify signature
+    secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
+    if (!ctx) {
+        printf("Failed to create verification context\n");
+        return -1;
+    }
+    
+    // Parse signature
+    secp256k1_ecdsa_signature sig;
+    if (!secp256k1_ecdsa_signature_parse_compact(ctx, &sig, test_signature)) {
+        printf("Failed to parse signature\n");
+        secp256k1_context_destroy(ctx);
+        return -1;
+    }
+    
+    // Parse public key
+    secp256k1_pubkey pubkey;
+    if (!secp256k1_ec_pubkey_parse(ctx, &pubkey, account_pool.accounts[pool_index].account.public_key, sizeof(account_pool.accounts[pool_index].account.public_key))) {
+        printf("Failed to parse public key\n");
+        secp256k1_context_destroy(ctx);
+        return -1;
+    }
+    
+    // Verify signature
+    if (!secp256k1_ecdsa_verify(ctx, &sig, test_message, &pubkey)) {
+        printf("Signature verification failed\n");
+        secp256k1_context_destroy(ctx);
+        return -1;
+    }
+    printf("Test 3 (verify signature): passed\n");
+    
+    secp256k1_context_destroy(ctx);
+    
+    // Test 4: Verify use count
+    if (account_pool.accounts[pool_index].use_count != 1) {
+        printf("Test 4 (verify use count): failed - use count is %d\n", account_pool.accounts[pool_index].use_count);
+        return -1;
+    }
+    printf("Test 4 (verify use count): passed\n");
+    
+    // Cleanup
+    secure_memzero(&account_pool.accounts[pool_index].account, sizeof(Account));
+    account_pool.accounts[pool_index].use_count = 0;
+    printf("\nTest cleanup completed\n");
+    
+    return 0;
+}
+
 int ecall_test_function() {
     printf("Running test suite...\n");
     
@@ -854,6 +952,13 @@ int ecall_test_function() {
         return -1;
     }
     printf("generate_account_in_pool test passed\n");
+
+    // Test sign_with_pool_account
+    if (test_sign_with_pool_account() != 0) {
+        printf("sign_with_pool_account test failed\n");
+        return -1;
+    }
+    printf("sign_with_pool_account test passed\n");
     
     return 0;
 }
@@ -981,8 +1086,66 @@ int ecall_unload_account_from_pool(const char* account_id) {
 }
 
 int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message, size_t message_len, uint8_t* signature, size_t signature_len) {
-    printf("WARNING: ecall_sign_with_pool_account is deprecated\n");
-    return -1;
+    printf("Signing message with pool account %s...\n", account_id);
+    
+    if (!account_id || !message || !signature || message_len == 0 || signature_len < 64) {
+        printf("Invalid parameters: account_id=%p, message=%p, signature=%p, message_len=%zu, signature_len=%zu\n",
+               account_id, message, signature, message_len, signature_len);
+        return -1;
+    }
+
+    // Convert hex string to bytes
+    uint8_t address[20];
+    if (strlen(account_id) != 42 || account_id[0] != '0' || account_id[1] != 'x') {
+        printf("Invalid account ID format\n");
+        return -1;
+    }
+    
+    for (int i = 0; i < 20; i++) {
+        char byte_str[3] = {account_id[2 + i*2], account_id[2 + i*2 + 1], 0};
+        address[i] = (uint8_t)strtol(byte_str, NULL, 16);
+    }
+
+    // Find account in pool
+    int pool_index = find_account_in_pool(address);
+    if (pool_index == -1) {
+        printf("Account not found in pool\n");
+        return -1;
+    }
+    printf("Found account at pool index %d\n", pool_index);
+
+    // Create secp256k1 context
+    secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
+    if (!ctx) {
+        printf("Failed to create secp256k1 context\n");
+        return -1;
+    }
+    printf("Secp256k1 context created\n");
+
+    // Create signature
+    secp256k1_ecdsa_signature sig;
+    if (!secp256k1_ecdsa_sign(ctx, &sig, message, account_pool.accounts[pool_index].account.private_key, NULL, NULL)) {
+        printf("Failed to create signature\n");
+        secp256k1_context_destroy(ctx);
+        return -1;
+    }
+    printf("Signature created\n");
+
+    // Serialize signature
+    if (!secp256k1_ecdsa_signature_serialize_compact(ctx, signature, &sig)) {
+        printf("Failed to serialize signature\n");
+        secp256k1_context_destroy(ctx);
+        return -1;
+    }
+    printf("Signature serialized\n");
+
+    // Increment use count
+    account_pool.accounts[pool_index].use_count++;
+    printf("Use count incremented to %d\n", account_pool.accounts[pool_index].use_count);
+
+    secp256k1_context_destroy(ctx);
+    printf("Message signing completed successfully\n");
+    return 0;
 }
 
 int ecall_get_pool_status(uint32_t* total_accounts, uint32_t* active_accounts) {
@@ -1124,11 +1287,6 @@ int ecall_test_sign_verify(void) {
     printf("Signature verified successfully\n");
     
     secp256k1_context_destroy(ctx);
-    return 0;
-}
-
-static int test_sign_with_pool_account() {
-    // ... existing code ...
     return 0;
 }
 
