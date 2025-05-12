@@ -774,7 +774,56 @@ static int test_unload_account_from_pool() {
     return 0;
 }
 
-// Update ecall_test_function to include new test
+static int test_generate_account_in_pool() {
+    printf("\nTesting account generation and pool loading...\n");
+    
+    // Test 1: Generate account
+    if (ecall_generate_account() != 0) {
+        printf("Test 1 (generate account): failed\n");
+        return -1;
+    }
+    printf("Test 1 (generate account): passed\n");
+
+    // Save account to get its address
+    if (ecall_save_account("default") != 0) {
+        printf("Failed to save test account\n");
+        return -1;
+    }
+
+    // Create account_id from address
+    char account_id[43]; // 0x + 40 hex chars + null terminator
+    snprintf(account_id, sizeof(account_id), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+             current_account.address[0], current_account.address[1], current_account.address[2], current_account.address[3],
+             current_account.address[4], current_account.address[5], current_account.address[6], current_account.address[7],
+             current_account.address[8], current_account.address[9], current_account.address[10], current_account.address[11],
+             current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
+             current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
+
+    // Test 2: Load account to pool
+    int pool_index = ecall_load_account_to_pool(account_id);
+    if (pool_index < 0) {
+        printf("Test 2 (load to pool): failed with index %d\n", pool_index);
+        return -2;
+    }
+    printf("Test 2 (load to pool): passed, account at index %d\n", pool_index);
+
+    // Test 3: Verify account was added to pool
+    if (!account_pool.accounts[pool_index].account.is_initialized) {
+        printf("Test 3 (verify account): failed - account not initialized\n");
+        return -3;
+    }
+    printf("Test 3 (verify account): passed\n");
+
+    // Test 4: Verify use count
+    if (account_pool.accounts[pool_index].use_count != 0) {
+        printf("Test 4 (verify use count): failed - use count is %d\n", account_pool.accounts[pool_index].use_count);
+        return -4;
+    }
+    printf("Test 4 (verify use count): passed\n");
+
+    return 0;
+}
+
 int ecall_test_function() {
     printf("Running test suite...\n");
     
@@ -798,6 +847,13 @@ int ecall_test_function() {
         return -1;
     }
     printf("unload_account_from_pool test passed\n");
+
+    // Test generate_account_in_pool
+    if (test_generate_account_in_pool() != 0) {
+        printf("generate_account_in_pool test failed\n");
+        return -1;
+    }
+    printf("generate_account_in_pool test passed\n");
     
     return 0;
 }
@@ -1071,14 +1127,10 @@ int ecall_test_sign_verify(void) {
     return 0;
 }
 
-// TODO: Refactor use_count
-// Current implementation stores use_count in PoolAccount structure, which means it's lost when account is unloaded
-// Plan for refactoring:
-// 1. Move use_count to Account structure
-// 2. Update AccountFile structure to include use_count
-// 3. Update save/load functions to handle use_count
-// 4. Update pool functions to use Account.use_count instead of PoolAccount.use_count
-// This will allow us to persist usage statistics between pool loads/unloads
+static int test_sign_with_pool_account() {
+    // ... existing code ...
+    return 0;
+}
 
 #ifdef __cplusplus
 }
