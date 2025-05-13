@@ -14,10 +14,14 @@
 #include <pwd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <dirent.h>
+#include <vector>
+#include <string>
 
 #define BUFLEN 2048
 #define MAXPATHLEN 255
 #define MAX_PATH FILENAME_MAX
+#define MAX_POOL_SIZE 100  // Maximum number of accounts in the pool
 
 /* Global EID shared by multiple threads */
 sgx_enclave_id_t global_eid = 0;
@@ -151,6 +155,51 @@ void print_usage() {
     printf("  get_pool_status - Get pool status\n");
 }
 
+// Функция для получения списка аккаунтов на диске
+std::vector<std::string> get_accounts_from_disk() {
+    std::vector<std::string> accounts;
+    DIR* dir;
+    struct dirent* ent;
+    const char* dir_path = g_is_test_mode ? "test_accounts" : "accounts";
+    
+    printf("Debug: Reading directory %s\n", dir_path);
+    
+    if ((dir = opendir(dir_path)) != NULL) {
+        printf("Debug: Directory opened successfully\n");
+        while ((ent = readdir(dir)) != NULL) {
+            printf("Debug: Found file: %s\n", ent->d_name);
+            // Пропускаем . и ..
+            if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0) {
+                printf("Debug: Skipping . or ..\n");
+                continue;
+            }
+            
+            std::string filename = ent->d_name;
+            printf("Debug: Checking file: %s (length: %zu)\n", filename.c_str(), filename.length());
+            
+            // Проверяем, что это файл аккаунта (заканчивается на .account)
+            if (filename.length() > 8) {
+                std::string extension = filename.substr(filename.length() - 8);
+                printf("Debug: File extension: %s\n", extension.c_str());
+                if (extension == ".account") {
+                    printf("Debug: Found account file: %s\n", filename.c_str());
+                    // Убираем расширение .account
+                    std::string account_id = filename.substr(0, filename.length() - 8);
+                    printf("Debug: Adding account: %s\n", account_id.c_str());
+                    accounts.push_back(account_id);
+                }
+            } else {
+                printf("Debug: File too short to be an account file\n");
+            }
+        }
+        closedir(dir);
+        printf("Debug: Found %zu account files\n", accounts.size());
+    } else {
+        printf("Warning: Could not open directory %s\n", dir_path);
+    }
+    return accounts;
+}
+
 int main(int argc, char *argv[]) {
     sgx_status_t status;
     sgx_launch_token_t token = {0};
@@ -195,6 +244,10 @@ int main(int argc, char *argv[]) {
     printf("  test_save_load - Test the save/load cycle\n");
     printf("  test_sign_verify - Test transaction signing and verification\n");
     printf("  test_mode [on|off] - Enable/disable test mode\n");
+    printf("  load_pool 0x1234...5678 - Load account to pool\n");
+    printf("  unload_pool 0x1234...5678 - Unload account from pool\n");
+    printf("  sign_pool 0x1234...5678 0000000000000000000000000000000000000000000000000000000000000001 - Sign with pool account\n");
+    printf("  pool_status - Show pool status\n");
     printf("  help - Show this help message\n");
     printf("  exit - Exit the application\n");
 
@@ -323,6 +376,101 @@ int main(int argc, char *argv[]) {
                 printf("Usage: test_mode [on|off]\n");
             }
         }
+        else if (strcmp(command, "load_pool") == 0) {
+            if (strlen(arg) < 42 || strncmp(arg, "0x", 2) != 0) {
+                printf("Error: Invalid Ethereum address format. Expected: 0x followed by 40 hex characters\n");
+                continue;
+            }
+            status = ecall_load_account_to_pool(global_eid, &retval, arg);
+            if (status != SGX_SUCCESS || retval != 0) {
+                printf("Error: Failed to load account to pool\n");
+                continue;
+            }
+            printf("Account loaded to pool successfully\n");
+        }
+        else if (strcmp(command, "unload_pool") == 0) {
+            if (strlen(arg) < 42 || strncmp(arg, "0x", 2) != 0) {
+                printf("Error: Invalid Ethereum address format. Expected: 0x followed by 40 hex characters\n");
+                continue;
+            }
+            status = ecall_unload_account_from_pool(global_eid, &retval, arg);
+            if (status != SGX_SUCCESS || retval != 0) {
+                printf("Error: Failed to unload account from pool\n");
+                continue;
+            }
+            printf("Account unloaded from pool successfully\n");
+        }
+        else if (strcmp(command, "sign_pool") == 0) {
+            char* space = strchr(arg, ' ');
+            if (!space) {
+                printf("Error: Invalid format. Expected: sign_pool <address> <tx_hash>\n");
+                continue;
+            }
+            *space = '\0';
+            char* tx_hash = space + 1;
+
+            if (strlen(arg) < 42 || strncmp(arg, "0x", 2) != 0) {
+                printf("Error: Invalid Ethereum address format\n");
+                continue;
+            }
+            if (strlen(tx_hash) != 64) {
+                printf("Error: Transaction hash must be 64 hex characters\n");
+                continue;
+            }
+
+            // Convert hex string to bytes
+            uint8_t tx_hash_bytes[32];
+            for (int i = 0; i < 32; i++) {
+                char byte_str[3] = {tx_hash[i*2], tx_hash[i*2+1], '\0'};
+                tx_hash_bytes[i] = (uint8_t)strtol(byte_str, NULL, 16);
+            }
+
+            uint8_t signature[64];
+            status = ecall_sign_with_pool_account(global_eid, &retval, arg, tx_hash_bytes, sizeof(tx_hash_bytes), signature, sizeof(signature));
+            if (status != SGX_SUCCESS || retval != 0) {
+                printf("Error: Failed to sign with pool account\n");
+                continue;
+            }
+
+            // Print signature in hex
+            printf("Signature: ");
+            for (int i = 0; i < 64; i++) {
+                printf("%02x", signature[i]);
+            }
+            printf("\n");
+        }
+        else if (strcmp(command, "pool_status") == 0) {
+            uint32_t total_accounts = 0;
+            uint32_t active_accounts = 0;
+            status = ecall_get_pool_status(global_eid, &retval, &total_accounts, &active_accounts);
+            if (status != SGX_SUCCESS || retval != 0) {
+                printf("Error: Failed to get pool status\n");
+                continue;
+            }
+            
+            // Получаем список аккаунтов на диске
+            std::vector<std::string> disk_accounts = get_accounts_from_disk();
+            
+            printf("Pool status:\n");
+            printf("  Total accounts in pool: %u\n", total_accounts);
+            printf("  Accounts used for signing: %u\n", active_accounts);
+            printf("  Free slots: %u\n", MAX_POOL_SIZE - total_accounts);
+            printf("  Accounts on disk: %zu\n", disk_accounts.size());
+            
+            if (!disk_accounts.empty()) {
+                printf("\nAccounts on disk:\n");
+                for (const auto& account : disk_accounts) {
+                    printf("  %s\n", account.c_str());
+                }
+            }
+            
+            if (total_accounts > 0) {
+                printf("\nAccounts in pool:\n");
+                // TODO: Добавить вывод списка аккаунтов в пуле, когда будет доступна соответствующая функция в энклаве
+                printf("  [List of accounts in pool will be available after implementing pool enumeration]\n");
+                printf("  Note: %u account(s) were used for signing\n", active_accounts);
+            }
+        }
         else if (strcmp(command, "help") == 0) {
             printf("Available commands:\n");
             printf("  generate_account - Generate a new Ethereum account\n");
@@ -333,6 +481,10 @@ int main(int argc, char *argv[]) {
             printf("  test_save_load - Test the save/load cycle\n");
             printf("  test_sign_verify - Test transaction signing and verification\n");
             printf("  test_mode [on|off] - Enable/disable test mode\n");
+            printf("  load_pool 0x1234...5678 - Load account to pool\n");
+            printf("  unload_pool 0x1234...5678 - Unload account from pool\n");
+            printf("  sign_pool 0x1234...5678 0000000000000000000000000000000000000000000000000000000000000001 - Sign with pool account\n");
+            printf("  pool_status - Show pool status\n");
             printf("  help - Show this help message\n");
             printf("  exit - Exit the application\n");
         }
