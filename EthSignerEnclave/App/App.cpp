@@ -17,6 +17,8 @@
 #include <dirent.h>
 #include <vector>
 #include <string>
+#include <stdlib.h>
+#include <stdint.h>
 
 #define BUFLEN 2048
 #define MAXPATHLEN 255
@@ -162,42 +164,48 @@ std::vector<std::string> get_accounts_from_disk() {
     struct dirent* ent;
     const char* dir_path = g_is_test_mode ? "test_accounts" : "accounts";
     
-    printf("Debug: Reading directory %s\n", dir_path);
-    
     if ((dir = opendir(dir_path)) != NULL) {
-        printf("Debug: Directory opened successfully\n");
         while ((ent = readdir(dir)) != NULL) {
-            printf("Debug: Found file: %s\n", ent->d_name);
             // Пропускаем . и ..
             if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0) {
-                printf("Debug: Skipping . or ..\n");
                 continue;
             }
             
             std::string filename = ent->d_name;
-            printf("Debug: Checking file: %s (length: %zu)\n", filename.c_str(), filename.length());
             
             // Проверяем, что это файл аккаунта (заканчивается на .account)
             if (filename.length() > 8) {
                 std::string extension = filename.substr(filename.length() - 8);
-                printf("Debug: File extension: %s\n", extension.c_str());
                 if (extension == ".account") {
-                    printf("Debug: Found account file: %s\n", filename.c_str());
                     // Убираем расширение .account
                     std::string account_id = filename.substr(0, filename.length() - 8);
-                    printf("Debug: Adding account: %s\n", account_id.c_str());
                     accounts.push_back(account_id);
                 }
-            } else {
-                printf("Debug: File too short to be an account file\n");
             }
         }
         closedir(dir);
-        printf("Debug: Found %zu account files\n", accounts.size());
-    } else {
-        printf("Warning: Could not open directory %s\n", dir_path);
     }
     return accounts;
+}
+
+// Функция для получения списка аккаунтов на диске
+void list_account_files() {
+    DIR* dir = opendir("accounts");
+    if (dir == NULL) {
+        printf("Error: Cannot open accounts directory\n");
+        return;
+    }
+
+    struct dirent* entry;
+    printf("Account files in accounts/:\n");
+    while ((entry = readdir(dir)) != NULL) {
+        // Пропускаем . и ..
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+        printf("  %s\n", entry->d_name);
+    }
+    closedir(dir);
 }
 
 int main(int argc, char *argv[]) {
@@ -442,33 +450,31 @@ int main(int argc, char *argv[]) {
         else if (strcmp(command, "pool_status") == 0) {
             uint32_t total_accounts = 0;
             uint32_t active_accounts = 0;
-            status = ecall_get_pool_status(global_eid, &retval, &total_accounts, &active_accounts);
+            char account_addresses[4300] = {0};  // Buffer for all addresses
+
+            status = ecall_get_pool_status(global_eid, &retval, &total_accounts, &active_accounts, account_addresses);
             if (status != SGX_SUCCESS || retval != 0) {
-                printf("Error: Failed to get pool status\n");
+                printf("Error: Failed to get pool status (status: %d, retval: %d)\n", status, retval);
                 continue;
             }
-            
-            // Получаем список аккаунтов на диске
-            std::vector<std::string> disk_accounts = get_accounts_from_disk();
-            
+
             printf("Pool status:\n");
-            printf("  Total accounts in pool: %u\n", total_accounts);
-            printf("  Accounts used for signing: %u\n", active_accounts);
-            printf("  Free slots: %u\n", MAX_POOL_SIZE - total_accounts);
-            printf("  Accounts on disk: %zu\n", disk_accounts.size());
+            printf("Total accounts: %u\n", total_accounts);
+            printf("Active accounts: %u\n", active_accounts);
+            printf("Account addresses:\n");
             
-            if (!disk_accounts.empty()) {
-                printf("\nAccounts on disk:\n");
-                for (const auto& account : disk_accounts) {
-                    printf("  %s\n", account.c_str());
-                }
+            // Parse comma-separated addresses
+            char* address = strtok(account_addresses, ",");
+            while (address != NULL) {
+                printf("  %s\n", address);
+                address = strtok(NULL, ",");
             }
-            
-            if (total_accounts > 0) {
-                printf("\nAccounts in pool:\n");
-                // TODO: Добавить вывод списка аккаунтов в пуле, когда будет доступна соответствующая функция в энклаве
-                printf("  [List of accounts in pool will be available after implementing pool enumeration]\n");
-                printf("  Note: %u account(s) were used for signing\n", active_accounts);
+
+            // Показываем список файлов аккаунтов
+            printf("\nAccount files on disk:\n");
+            std::vector<std::string> disk_accounts = get_accounts_from_disk();
+            for (const auto& account : disk_accounts) {
+                printf("  %s\n", account.c_str());
             }
         }
         else if (strcmp(command, "help") == 0) {

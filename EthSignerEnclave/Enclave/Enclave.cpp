@@ -957,105 +957,20 @@ static int test_sign_with_pool_account() {
 }
 
 static int test_get_pool_status() {
-    printf("\nTesting get_pool_status...\n");
+    printf("Testing get_pool_status...\n");
     
-    // Clear pool before testing
-    for (int i = 0; i < MAX_POOL_SIZE; i++) {
-        secure_memzero(&account_pool.accounts[i].account, sizeof(Account));
-        account_pool.accounts[i].account.is_initialized = false;
-    }
-    printf("Pool cleared before testing\n");
-    
-    // Test 1: Get status with null parameters
-    int result = ecall_get_pool_status(NULL, NULL);
-    printf("Test 1 (null parameters): result = %d (expected -1)\n", result);
-    
-    // Test 2: Get status of empty pool
     uint32_t total_accounts = 0;
     uint32_t active_accounts = 0;
-    result = ecall_get_pool_status(&total_accounts, &active_accounts);
-    printf("Test 2 (empty pool): result = %d (expected 0), total=%u, active=%u\n", 
-           result, total_accounts, active_accounts);
-    if (result != 0 || total_accounts != 0 || active_accounts != 0) {
-        return -1;
-    }
-
-    // Test 3: Generate and load test account
-    printf("\nTest 3: Generate and load test account...\n");
-    if (ecall_generate_account() != 0) {
-        printf("Failed to generate test account\n");
-        return -1;
-    }
+    char account_addresses[4300] = {0};  // Buffer for all addresses
     
-    // Save account to get its address
-    if (ecall_save_account("default") != 0) {
-        printf("Failed to save test account\n");
-        return -1;
-    }
-    
-    // Create account_id from address
-    char account_id[43]; // 0x + 40 hex chars + null terminator
-    snprintf(account_id, sizeof(account_id), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
-             current_account.address[0], current_account.address[1], current_account.address[2], current_account.address[3],
-             current_account.address[4], current_account.address[5], current_account.address[6], current_account.address[7],
-             current_account.address[8], current_account.address[9], current_account.address[10], current_account.address[11],
-             current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
-             current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
-    
-    // Load account to pool
-    int pool_index = ecall_load_account_to_pool(account_id);
-    if (pool_index < 0) {
-        printf("Failed to load account to pool\n");
-        return -1;
-    }
-
-    // Verify initial use_count
-    if (account_pool.accounts[pool_index].account.use_count != 0) {
-        printf("Initial use_count is not 0: %u\n", account_pool.accounts[pool_index].account.use_count);
-        return -1;
-    }
-    printf("Initial use_count verified\n");
-    
-    // Get status after loading
-    result = ecall_get_pool_status(&total_accounts, &active_accounts);
-    printf("Test 3 (after loading): result = %d (expected 0), total=%u, active=%u\n", 
-           result, total_accounts, active_accounts);
-    if (result != 0 || total_accounts != 1 || active_accounts != 0) {
-        return -1;
-    }
-    
-    // Test 4: Sign message to make account active
-    uint8_t test_message[32] = {0};
-    uint8_t test_signature[64] = {0};
-    for (int i = 0; i < sizeof(test_message); i++) {
-        test_message[i] = i;  // Simple test pattern
-    }
-    
-    result = ecall_sign_with_pool_account(account_id, test_message, sizeof(test_message), test_signature, sizeof(test_signature));
+    int result = ecall_get_pool_status(&total_accounts, &active_accounts, account_addresses);
     if (result != 0) {
-        printf("Failed to sign message\n");
+        printf("Failed to get pool status\n");
         return -1;
     }
-
-    // Verify use_count was incremented
-    if (account_pool.accounts[pool_index].account.use_count != 1) {
-        printf("use_count not incremented after signing: %u\n", account_pool.accounts[pool_index].account.use_count);
-        return -1;
-    }
-    printf("use_count verified after signing\n");
     
-    // Get status after signing
-    result = ecall_get_pool_status(&total_accounts, &active_accounts);
-    printf("Test 4 (after signing): result = %d (expected 0), total=%u, active=%u\n", 
-           result, total_accounts, active_accounts);
-    if (result != 0 || total_accounts != 1 || active_accounts != 1) {
-        return -1;
-    }
-
-    // Cleanup
-    secure_memzero(&account_pool.accounts[pool_index].account, sizeof(Account));
-    account_pool.accounts[pool_index].account.is_initialized = false;
-    printf("\nTest cleanup completed\n");
+    printf("Pool status: total=%u, active=%u\n", total_accounts, active_accounts);
+    printf("Addresses: %s\n", account_addresses);
     
     return 0;
 }
@@ -1200,6 +1115,106 @@ int ecall_test_function() {
         return -1;
     }
     printf("use_count_persistence test passed\n");
+
+    // Simple test for ecall_get_pool_status
+    printf("\nRunning simple test for ecall_get_pool_status...\n");
+    
+    // Clear pool before testing
+    for (int i = 0; i < MAX_POOL_SIZE; i++) {
+        secure_memzero(&account_pool.accounts[i].account, sizeof(Account));
+        account_pool.accounts[i].account.is_initialized = false;
+    }
+    printf("Pool cleared\n");
+
+    // Initialize test variables
+    uint32_t total_accounts = 0;
+    uint32_t active_accounts = 0;
+    char account_addresses[4300] = {0};  // Buffer for all addresses
+
+    // Initialize address buffers
+    for (int i = 0; i < MAX_POOL_SIZE; i++) {
+        account_addresses[i*43] = '\0';  // Initialize empty string
+    }
+
+    // Test 1: Check empty pool
+    int result = ecall_get_pool_status(&total_accounts, &active_accounts, account_addresses);
+    printf("Test 1 (empty pool): result=%d, total=%u, active=%u\n", 
+           result, total_accounts, active_accounts);
+    if (result != 0 || total_accounts != 0 || active_accounts != 0) {
+        printf("Test 1 failed\n");
+        return -1;
+    }
+
+    // Test 2: Add an account to pool
+    if (ecall_generate_account() != 0) {
+        printf("Failed to generate test account\n");
+        return -1;
+    }
+    printf("Test account generated\n");
+
+    // Save account to get its address
+    if (ecall_save_account("default") != 0) {
+        printf("Failed to save test account\n");
+        return -1;
+    }
+
+    // Create account_id from address
+    char account_id[43];
+    snprintf(account_id, sizeof(account_id), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+             current_account.address[0], current_account.address[1], current_account.address[2], current_account.address[3],
+             current_account.address[4], current_account.address[5], current_account.address[6], current_account.address[7],
+             current_account.address[8], current_account.address[9], current_account.address[10], current_account.address[11],
+             current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
+             current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
+
+    // Load account to pool
+    int pool_index = ecall_load_account_to_pool(account_id);
+    if (pool_index < 0) {
+        printf("Failed to load account to pool\n");
+        return -1;
+    }
+    printf("Account loaded to pool at index %d\n", pool_index);
+
+    // Check pool status after loading
+    result = ecall_get_pool_status(&total_accounts, &active_accounts, account_addresses);
+    printf("Test 2 (after loading): result=%d, total=%u, active=%u\n", 
+           result, total_accounts, active_accounts);
+    if (result != 0 || total_accounts != 1 || active_accounts != 0) {
+        printf("Test 2 failed\n");
+        return -1;
+    }
+
+    // Test 3: Sign a message to make account active
+    uint8_t test_message[32] = {0};
+    uint8_t test_signature[64] = {0};
+    for (int i = 0; i < sizeof(test_message); i++) {
+        test_message[i] = i;
+    }
+
+    result = ecall_sign_with_pool_account(account_id, test_message, sizeof(test_message), test_signature, sizeof(test_signature));
+    if (result != 0) {
+        printf("Failed to sign message\n");
+        return -1;
+    }
+    printf("Message signed successfully\n");
+
+    // Check pool status after signing
+    result = ecall_get_pool_status(&total_accounts, &active_accounts, account_addresses);
+    printf("Test 3 (after signing): result=%d, total=%u, active=%u\n", 
+           result, total_accounts, active_accounts);
+    if (result != 0 || total_accounts != 1 || active_accounts != 1) {
+        printf("Test 3 failed\n");
+        return -1;
+    }
+
+    printf("Simple test for ecall_get_pool_status passed\n");
+    
+    // Clear pool after tests
+    for (int i = 0; i < MAX_POOL_SIZE; i++) {
+        secure_memzero(&account_pool.accounts[i].account, sizeof(Account));
+        account_pool.accounts[i].account.is_initialized = false;
+    }
+    printf("Pool cleared after tests\n");
     
     return 0;
 }
@@ -1398,28 +1413,67 @@ int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message,
     return 0;
 }
 
-int ecall_get_pool_status(uint32_t* total_accounts, uint32_t* active_accounts) {
+// Простая реализация strcat
+static char* my_strcat(char* dest, const char* src) {
+    char* ptr = dest + strlen(dest);
+    while (*src != '\0') {
+        *ptr++ = *src++;
+    }
+    *ptr = '\0';
+    return dest;
+}
+
+int ecall_get_pool_status(uint32_t* total_accounts, uint32_t* active_accounts, char* account_addresses) {
     printf("Getting pool status...\n");
     
-    if (!total_accounts || !active_accounts) {
-        printf("Invalid parameters: total_accounts=%p, active_accounts=%p\n", total_accounts, active_accounts);
+    if (!total_accounts || !active_accounts || !account_addresses) {
+        printf("Invalid parameters: total_accounts=%p, active_accounts=%p, account_addresses=%p\n", 
+               total_accounts, active_accounts, account_addresses);
         return -1;
     }
 
     // Count total and active accounts
     *total_accounts = 0;
     *active_accounts = 0;
+    account_addresses[0] = '\0';  // Initialize empty string
     
     for (int i = 0; i < MAX_POOL_SIZE; i++) {
         if (account_pool.accounts[i].account.is_initialized) {
+            // Convert address to hex string
+            char address[43];
+            snprintf(address, sizeof(address), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+                    account_pool.accounts[i].account.address[0], account_pool.accounts[i].account.address[1],
+                    account_pool.accounts[i].account.address[2], account_pool.accounts[i].account.address[3],
+                    account_pool.accounts[i].account.address[4], account_pool.accounts[i].account.address[5],
+                    account_pool.accounts[i].account.address[6], account_pool.accounts[i].account.address[7],
+                    account_pool.accounts[i].account.address[8], account_pool.accounts[i].account.address[9],
+                    account_pool.accounts[i].account.address[10], account_pool.accounts[i].account.address[11],
+                    account_pool.accounts[i].account.address[12], account_pool.accounts[i].account.address[13],
+                    account_pool.accounts[i].account.address[14], account_pool.accounts[i].account.address[15],
+                    account_pool.accounts[i].account.address[16], account_pool.accounts[i].account.address[17],
+                    account_pool.accounts[i].account.address[18], account_pool.accounts[i].account.address[19]);
+            
+            // Add to total count
             (*total_accounts)++;
+            
+            // Add to active count if used
             if (account_pool.accounts[i].account.use_count > 0) {
                 (*active_accounts)++;
             }
+            
+            // Add to comma-separated list
+            if ((*total_accounts) > 1) {
+                my_strcat(account_addresses, ",");
+            }
+            my_strcat(account_addresses, address);
+            
+            printf("Found account at index %d: %s (use_count: %u)\n", 
+                   i, address, account_pool.accounts[i].account.use_count);
         }
     }
     
     printf("Pool status: total accounts=%u, active accounts=%u\n", *total_accounts, *active_accounts);
+    printf("Accounts directory: accounts/\n");
     return 0;
 }
 

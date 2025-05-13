@@ -47,7 +47,7 @@ extern void* g_peak_rsrv_mem_committed;
 #define MAX_POOL_SIZE 100  // Увеличиваем размер пула до 100 аккаунтов
 
 // Security constants
-#define MIN_ENTROPY_BITS 7.0  // Minimum entropy in bits for a 32-byte key
+#define MIN_ENTROPY_BITS 256
 #define KEY_GENERATION_MAX_ATTEMPTS 100
 #define MIN_PRIVATE_KEY_VALUE 0x1000000000000000ULL
 #define MAX_PRIVATE_KEY_VALUE 0xFFFFFFFFFFFFFFFFULL
