@@ -20,12 +20,12 @@
 #define LOG_INFO  2
 #define LOG_DEBUG 3
 
-// Current log level (can be changed at runtime)
-static int current_log_level = LOG_ERROR;  // Changed default to ERROR only
+// Default log level
+static int g_log_level = LOG_WARNING;
 
 // Logging function
 static void log_message(int level, const char* format, ...) {
-    if (level > current_log_level) return;
+    if (level > g_log_level) return;
     
     va_list args;
     va_start(args, format);
@@ -40,7 +40,7 @@ int ecall_set_log_level(int level) {
     if (level < LOG_ERROR || level > LOG_DEBUG) {
         return -1;
     }
-    current_log_level = level;
+    g_log_level = level;
     return 0;
 }
 
@@ -1216,6 +1216,10 @@ int ecall_test_function() {
     log_message(LOG_DEBUG, "\n=== Starting System Validation Tests ===\n");
     log_message(LOG_DEBUG, "Running validation tests to ensure system security and functionality...\n");
     
+    // Save current pool state
+    AccountPool saved_pool;
+    memcpy(&saved_pool, &account_pool, sizeof(AccountPool));
+    
     // Initialize test suite
     test_suite_t suite = {
         .suite_name = "Account Pool Tests",
@@ -1228,6 +1232,8 @@ int ecall_test_function() {
     log_message(LOG_DEBUG, "\n[TEST] Validating account lookup security...\n");
     if (test_find_account_in_pool(&suite) != 0) {
         log_message(LOG_DEBUG, "❌ Account lookup validation failed - security check failed\n");
+        // Restore pool state before returning
+        memcpy(&account_pool, &saved_pool, sizeof(AccountPool));
         return -1;
     }
     log_message(LOG_DEBUG, "✅ Account lookup validation passed - security checks confirmed\n");
@@ -1236,6 +1242,8 @@ int ecall_test_function() {
     log_message(LOG_DEBUG, "\n[TEST] Validating account loading security...\n");
     if (test_load_account_to_pool(&suite) != 0) {
         log_message(LOG_DEBUG, "❌ Account loading validation failed - security check failed\n");
+        // Restore pool state before returning
+        memcpy(&account_pool, &saved_pool, sizeof(AccountPool));
         return -1;
     }
     log_message(LOG_DEBUG, "✅ Account loading validation passed - security checks confirmed\n");
@@ -1244,6 +1252,8 @@ int ecall_test_function() {
     log_message(LOG_DEBUG, "\n[TEST] Validating account unloading security...\n");
     if (test_unload_account_from_pool(&suite) != 0) {
         log_message(LOG_DEBUG, "❌ Account unloading validation failed - security check failed\n");
+        // Restore pool state before returning
+        memcpy(&account_pool, &saved_pool, sizeof(AccountPool));
         return -1;
     }
     log_message(LOG_DEBUG, "✅ Account unloading validation passed - security checks confirmed\n");
@@ -1252,6 +1262,8 @@ int ecall_test_function() {
     log_message(LOG_DEBUG, "\n[TEST] Validating account generation security...\n");
     if (test_generate_account_in_pool(&suite) != 0) {
         log_message(LOG_DEBUG, "❌ Account generation validation failed - security check failed\n");
+        // Restore pool state before returning
+        memcpy(&account_pool, &saved_pool, sizeof(AccountPool));
         return -1;
     }
     log_message(LOG_DEBUG, "✅ Account generation validation passed - security checks confirmed\n");
@@ -1260,6 +1272,8 @@ int ecall_test_function() {
     log_message(LOG_DEBUG, "\n[TEST] Validating signature security...\n");
     if (test_sign_with_pool_account(&suite) != 0) {
         log_message(LOG_DEBUG, "❌ Signature validation failed - security check failed\n");
+        // Restore pool state before returning
+        memcpy(&account_pool, &saved_pool, sizeof(AccountPool));
         return -1;
     }
     log_message(LOG_DEBUG, "✅ Signature validation passed - security checks confirmed\n");
@@ -1268,6 +1282,8 @@ int ecall_test_function() {
     log_message(LOG_DEBUG, "\n[TEST] Validating pool status security...\n");
     if (test_get_pool_status(&suite) != 0) {
         log_message(LOG_DEBUG, "❌ Pool status validation failed - security check failed\n");
+        // Restore pool state before returning
+        memcpy(&account_pool, &saved_pool, sizeof(AccountPool));
         return -1;
     }
     log_message(LOG_DEBUG, "✅ Pool status validation passed - security checks confirmed\n");
@@ -1276,9 +1292,14 @@ int ecall_test_function() {
     log_message(LOG_DEBUG, "\n[TEST] Validating use count persistence security...\n");
     if (test_use_count_persistence(&suite) != 0) {
         log_message(LOG_DEBUG, "❌ Use count persistence validation failed - security check failed\n");
+        // Restore pool state before returning
+        memcpy(&account_pool, &saved_pool, sizeof(AccountPool));
         return -1;
     }
     log_message(LOG_DEBUG, "✅ Use count persistence validation passed - security checks confirmed\n");
+
+    // Restore original pool state
+    memcpy(&account_pool, &saved_pool, sizeof(AccountPool));
 
     log_message(LOG_DEBUG, "\n=== System Validation Tests Completed Successfully ===\n");
     log_message(LOG_DEBUG, "All security and functionality tests passed. The system is secure and ready for use.\n\n");
@@ -1385,7 +1406,7 @@ int ecall_unload_account_from_pool(const char* account_id) {
     // Find account in pool
     int pool_index = find_account_in_pool(address);
     if (pool_index == -1) {
-        log_message(LOG_WARNING, "Account not found in pool\n");
+        log_message(LOG_WARNING, "WARNING: Account not found in pool\n");
         return -1;
     }
     log_message(LOG_DEBUG, "Found account at pool index %d\n", pool_index);
