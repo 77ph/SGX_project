@@ -19,6 +19,8 @@
 #include <string>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
+#include <errno.h>
 
 #define BUFLEN 2048
 #define MAXPATHLEN 255
@@ -190,14 +192,21 @@ std::vector<std::string> get_accounts_from_disk() {
 
 // Функция для получения списка аккаунтов на диске
 void list_account_files() {
-    DIR* dir = opendir("accounts");
+    const char* dir_path = g_is_test_mode ? "test_accounts" : "accounts";
+    
+    // Create directory if it doesn't exist
+    if (mkdir(dir_path, 0755) != 0 && errno != EEXIST) {
+        printf("Error: Cannot create directory %s\n", dir_path);
+        return;
+    }
+
+    DIR* dir = opendir(dir_path);
     if (dir == NULL) {
-        printf("Error: Cannot open accounts directory\n");
+        printf("Error: Cannot open %s directory\n", dir_path);
         return;
     }
 
     struct dirent* entry;
-    printf("Account files in accounts/:\n");
     while ((entry = readdir(dir)) != NULL) {
         // Пропускаем . и ..
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
@@ -256,6 +265,7 @@ int main(int argc, char *argv[]) {
     printf("  unload_pool 0x1234...5678 - Unload account from pool\n");
     printf("  sign_pool 0x1234...5678 0000000000000000000000000000000000000000000000000000000000000001 - Sign with pool account\n");
     printf("  pool_status - Show pool status\n");
+    printf("  generate_pool - Generate new account in pool\n");
     printf("  help - Show this help message\n");
     printf("  exit - Exit the application\n");
 
@@ -389,12 +399,15 @@ int main(int argc, char *argv[]) {
                 printf("Error: Invalid Ethereum address format. Expected: 0x followed by 40 hex characters\n");
                 continue;
             }
+            printf("Loading account %s to pool...\n", arg);
             status = ecall_load_account_to_pool(global_eid, &retval, arg);
-            if (status != SGX_SUCCESS || retval != 0) {
+            if (status != SGX_SUCCESS) {
                 printf("Error: Failed to load account to pool\n");
                 continue;
             }
-            printf("Account loaded to pool successfully\n");
+            if (retval < 0) {
+                printf("Error: Failed to load account to pool\n");
+            }
         }
         else if (strcmp(command, "unload_pool") == 0) {
             if (strlen(arg) < 42 || strncmp(arg, "0x", 2) != 0) {
@@ -450,32 +463,34 @@ int main(int argc, char *argv[]) {
         else if (strcmp(command, "pool_status") == 0) {
             uint32_t total_accounts = 0;
             uint32_t active_accounts = 0;
-            char account_addresses[4300] = {0};  // Buffer for all addresses
-
+            char account_addresses[4300] = {0};
+            
             status = ecall_get_pool_status(global_eid, &retval, &total_accounts, &active_accounts, account_addresses);
             if (status != SGX_SUCCESS || retval != 0) {
-                printf("Error: Failed to get pool status (status: %d, retval: %d)\n", status, retval);
+                printf("Error: Failed to get pool status\n");
                 continue;
             }
-
+            
             printf("Pool status:\n");
             printf("Total accounts: %u\n", total_accounts);
             printf("Active accounts: %u\n", active_accounts);
-            printf("Account addresses:\n");
+            if (total_accounts > 0) {
+                printf("Account addresses: %s\n", account_addresses);
+            }
             
-            // Parse comma-separated addresses
-            char* address = strtok(account_addresses, ",");
-            while (address != NULL) {
-                printf("  %s\n", address);
-                address = strtok(NULL, ",");
+            // Display account files from disk
+            printf("\nAccount files in %s/:\n", g_is_test_mode ? "test_accounts" : "accounts");
+            list_account_files();
+        }
+        else if (strcmp(command, "generate_pool") == 0) {
+            char account_address[43] = {0};
+            status = ecall_generate_account_to_pool(global_eid, &retval, account_address);
+            if (status != SGX_SUCCESS || retval < 0) {
+                printf("Error: Failed to generate account in pool\n");
+                continue;
             }
-
-            // Показываем список файлов аккаунтов
-            printf("\nAccount files on disk:\n");
-            std::vector<std::string> disk_accounts = get_accounts_from_disk();
-            for (const auto& account : disk_accounts) {
-                printf("  %s\n", account.c_str());
-            }
+            printf("Account generated in pool at index %d\n", retval);
+            printf("Account address: %s\n", account_address);
         }
         else if (strcmp(command, "help") == 0) {
             printf("Available commands:\n");
@@ -491,6 +506,7 @@ int main(int argc, char *argv[]) {
             printf("  unload_pool 0x1234...5678 - Unload account from pool\n");
             printf("  sign_pool 0x1234...5678 0000000000000000000000000000000000000000000000000000000000000001 - Sign with pool account\n");
             printf("  pool_status - Show pool status\n");
+            printf("  generate_pool - Generate new account in pool\n");
             printf("  help - Show this help message\n");
             printf("  exit - Exit the application\n");
         }
