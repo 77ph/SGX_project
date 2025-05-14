@@ -46,6 +46,9 @@ enclave {
                                        [out] uint32_t* active_accounts,
                                        [out, size=4300] char* account_addresses);
 
+        // Новая функция для генерации аккаунта в пул
+        public int ecall_generate_account_to_pool([out, size=42] char* account_address);
+
         // Test functions
         public int ecall_save_test_account();
 

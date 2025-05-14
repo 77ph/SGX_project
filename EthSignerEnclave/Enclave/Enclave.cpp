@@ -562,6 +562,8 @@ int ecall_load_account(const char* account_id) {
     memcpy(&current_account, &data->account, sizeof(Account));
     current_account.is_initialized = true;
     printf("Account data copied successfully\n");
+
+    // Print first 8 bytes of private key for debugging
     printf("First 8 bytes of loaded private key: ");
     for (int i = 0; i < 8; i++) {
         printf("%02x ", current_account.private_key[i]);
@@ -1264,7 +1266,6 @@ int ecall_load_account_to_pool(const char* account_id) {
         printf("Failed to load account\n");
         return -1;
     }
-    printf("Account loaded successfully\n");
 
     // Find free slot in pool
     int free_slot = -1;
@@ -1279,12 +1280,10 @@ int ecall_load_account_to_pool(const char* account_id) {
         printf("No free slots in pool\n");
         return -1;
     }
-    printf("Found free slot at index %d\n", free_slot);
 
     // Copy account to pool
     memcpy(&account_pool.accounts[free_slot].account, &current_account, sizeof(Account));
     account_pool.accounts[free_slot].account.use_count = 0;
-    printf("Account copied to pool at index %d\n", free_slot);
 
     // Verify account was added correctly
     if (find_account_in_pool(current_account.address) != free_slot) {
@@ -1295,7 +1294,7 @@ int ecall_load_account_to_pool(const char* account_id) {
     }
 
     printf("Account successfully loaded to pool at index %d\n", free_slot);
-    return free_slot;
+    return free_slot;  // Return the index where account was loaded
 }
 
 int ecall_unload_account_from_pool(const char* account_id) {
@@ -1413,10 +1412,16 @@ int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message,
     return 0;
 }
 
-// Простая реализация strcat
+// Простая реализация strcat без использования strlen
 static char* my_strcat(char* dest, const char* src) {
-    char* ptr = dest + strlen(dest);
-    while (*src != '\0') {
+    // Find end of dest string manually
+    char* ptr = dest;
+    while (*ptr != '\0') {
+        ptr++;
+    }
+    
+    // Copy src to end of dest, ensuring we don't overflow
+    while (*src != '\0' && (ptr - dest) < 4299) { // Leave room for null terminator
         *ptr++ = *src++;
     }
     *ptr = '\0';
@@ -1626,6 +1631,53 @@ int ecall_test_sign_verify(void) {
     
     secp256k1_context_destroy(ctx);
     return 0;
+}
+
+int ecall_generate_account_to_pool(char* account_address) {
+    printf("Generating new account in pool...\n");
+    
+    if (!account_address) {
+        printf("Invalid account_address parameter\n");
+        return -1;
+    }
+
+    // Generate new account
+    if (ecall_generate_account() != 0) {
+        printf("Failed to generate account\n");
+        return -1;
+    }
+    printf("Account generated successfully\n");
+
+    // Find free slot in pool
+    int free_slot = -1;
+    for (int i = 0; i < MAX_POOL_SIZE; i++) {
+        if (!account_pool.accounts[i].account.is_initialized) {
+            free_slot = i;
+            break;
+        }
+    }
+
+    if (free_slot == -1) {
+        printf("No free slots in pool\n");
+        return -1;
+    }
+    printf("Found free slot at index %d\n", free_slot);
+
+    // Copy account to pool
+    memcpy(&account_pool.accounts[free_slot].account, &current_account, sizeof(Account));
+    account_pool.accounts[free_slot].account.use_count = 0;
+    printf("Account copied to pool at index %d\n", free_slot);
+
+    // Format address as hex string
+    snprintf(account_address, 43, "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+             current_account.address[0], current_account.address[1], current_account.address[2], current_account.address[3],
+             current_account.address[4], current_account.address[5], current_account.address[6], current_account.address[7],
+             current_account.address[8], current_account.address[9], current_account.address[10], current_account.address[11],
+             current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
+             current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
+
+    printf("Account successfully generated in pool at index %d\n", free_slot);
+    return free_slot;
 }
 
 #ifdef __cplusplus
