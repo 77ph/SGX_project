@@ -11,6 +11,7 @@
 #include <stdarg.h>
 #include <time.h>
 #include <math.h>  // Добавляем для log2
+#include "sha3.h"  // Добавляем для Keccak-256
 
 #define ENCLAVE_BUFSIZ 1024
 
@@ -293,12 +294,15 @@ Account* get_current_account(void) {
     return &current_account;
 }
 
-// Keccak-256 implementation
 void keccak_256(const uint8_t* input, size_t input_len, uint8_t* output) {
-    sgx_sha256_hash_t hash;
-    sgx_sha256_msg(input, input_len, &hash);
+    sha3_context ctx;
+    sha3_Init256(&ctx);
+    sha3_SetFlags(&ctx, SHA3_FLAGS_KECCAK); // ← 🔥 Включаем правильный режим!
+    sha3_Update(&ctx, input, input_len);
+    const uint8_t* hash = (const uint8_t*)sha3_Finalize(&ctx);
     memcpy(output, hash, 32);
 }
+
 
 // Internal function to generate account
 static int generate_account(Account* account) {
@@ -1238,97 +1242,169 @@ static int test_use_count_persistence(test_suite_t* suite) {
     return 0;
 }
 
-int ecall_test_function() {
-    log_message(LOG_DEBUG, "\n=== Starting System Validation Tests ===\n");
-    log_message(LOG_DEBUG, "Running validation tests to ensure system security and functionality...\n");
+// Test Keccak-256 address generation
+static int test_keccak_address_generation(test_suite_t* suite) {
+    const char* test_name = "Keccak-256 Address Generation";
+    log_message(LOG_INFO, "Running test: %s\n", test_name);
     
-    // Save current pool state
-    AccountPool saved_pool;
-    memcpy(&saved_pool, &account_pool, sizeof(AccountPool));
-    
-    // Initialize test suite
-    test_suite_t suite = {
-        .suite_name = "Account Pool Tests",
-        .results = NULL,
-        .result_count = 0,
-        .passed_count = 0
+    // Predefined private key (32 bytes) - using the same key as in Python test
+    const uint8_t test_private_key[32] = {
+        0xb7, 0x1c, 0x71, 0xa6, 0x9c, 0x80, 0x4f, 0x6b,
+        0x50, 0xfa, 0x52, 0xee, 0xcb, 0x91, 0xb8, 0x4f,
+        0x0c, 0xd7, 0xfc, 0x93, 0x8d, 0x4e, 0xe5, 0xa7,
+        0xb2, 0xfe, 0x9b, 0x8e, 0xb2, 0xe5, 0xe8, 0x2e
     };
     
-    // Test find_account_in_pool
-    log_message(LOG_DEBUG, "\n[TEST] Validating account lookup security...\n");
-    if (test_find_account_in_pool(&suite) != 0) {
-        log_message(LOG_DEBUG, "❌ Account lookup validation failed - security check failed\n");
-        // Restore pool state before returning
-        memcpy(&account_pool, &saved_pool, sizeof(AccountPool));
-        return -1;
-    }
-    log_message(LOG_DEBUG, "✅ Account lookup validation passed - security checks confirmed\n");
+    // Expected Ethereum address for this private key
+    const char* expected_address = "0x3c91a91e07531821faa19a9213bcce2169892f8a";
     
-    // Test load_account_to_pool
-    log_message(LOG_DEBUG, "\n[TEST] Validating account loading security...\n");
-    if (test_load_account_to_pool(&suite) != 0) {
-        log_message(LOG_DEBUG, "❌ Account loading validation failed - security check failed\n");
-        // Restore pool state before returning
-        memcpy(&account_pool, &saved_pool, sizeof(AccountPool));
-        return -1;
+    // Create secp256k1 context
+    secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
+    if (!ctx) {
+        print_test_result(test_name, 0, "Failed to create secp256k1 context");
+        return 0;
     }
-    log_message(LOG_DEBUG, "✅ Account loading validation passed - security checks confirmed\n");
     
-    // Test unload_account_from_pool
-    log_message(LOG_DEBUG, "\n[TEST] Validating account unloading security...\n");
-    if (test_unload_account_from_pool(&suite) != 0) {
-        log_message(LOG_DEBUG, "❌ Account unloading validation failed - security check failed\n");
-        // Restore pool state before returning
-        memcpy(&account_pool, &saved_pool, sizeof(AccountPool));
-        return -1;
+    // Create public key
+    secp256k1_pubkey pubkey;
+    if (!secp256k1_ec_pubkey_create(ctx, &pubkey, test_private_key)) {
+        secp256k1_context_destroy(ctx);
+        print_test_result(test_name, 0, "Failed to create public key");
+        return 0;
     }
-    log_message(LOG_DEBUG, "✅ Account unloading validation passed - security checks confirmed\n");
-
-    // Test generate_account_in_pool
-    log_message(LOG_DEBUG, "\n[TEST] Validating account generation security...\n");
-    if (test_generate_account_in_pool(&suite) != 0) {
-        log_message(LOG_DEBUG, "❌ Account generation validation failed - security check failed\n");
-        // Restore pool state before returning
-        memcpy(&account_pool, &saved_pool, sizeof(AccountPool));
-        return -1;
-    }
-    log_message(LOG_DEBUG, "✅ Account generation validation passed - security checks confirmed\n");
-
-    // Test sign_with_pool_account
-    log_message(LOG_DEBUG, "\n[TEST] Validating signature security...\n");
-    if (test_sign_with_pool_account(&suite) != 0) {
-        log_message(LOG_DEBUG, "❌ Signature validation failed - security check failed\n");
-        // Restore pool state before returning
-        memcpy(&account_pool, &saved_pool, sizeof(AccountPool));
-        return -1;
-    }
-    log_message(LOG_DEBUG, "✅ Signature validation passed - security checks confirmed\n");
     
-    // Test get_pool_status
-    log_message(LOG_DEBUG, "\n[TEST] Validating pool status security...\n");
-    if (test_get_pool_status(&suite) != 0) {
-        log_message(LOG_DEBUG, "❌ Pool status validation failed - security check failed\n");
-        // Restore pool state before returning
-        memcpy(&account_pool, &saved_pool, sizeof(AccountPool));
-        return -1;
+    // Serialize public key
+    uint8_t serialized_pubkey[65];
+    size_t serialized_pubkey_len = sizeof(serialized_pubkey);
+    if (!secp256k1_ec_pubkey_serialize(ctx, serialized_pubkey, &serialized_pubkey_len, &pubkey, SECP256K1_EC_UNCOMPRESSED)) {
+        secp256k1_context_destroy(ctx);
+        print_test_result(test_name, 0, "Failed to serialize public key");
+        return 0;
     }
-    log_message(LOG_DEBUG, "✅ Pool status validation passed - security checks confirmed\n");
+
+    // Debug output for public key
+    log_message(LOG_DEBUG, "Full public key (65 bytes):\n");
+    for (int i = 0; i < 65; i++) {
+        log_message(LOG_DEBUG, "%02x ", serialized_pubkey[i]);
+    }
+    log_message(LOG_DEBUG, "\n");
+
+    log_message(LOG_DEBUG, "Public key without prefix (64 bytes):\n");
+    for (int i = 1; i < 65; i++) {
+        log_message(LOG_DEBUG, "%02x ", serialized_pubkey[i]);
+    }
+    log_message(LOG_DEBUG, "\n");
     
-    // Test use_count persistence
-    log_message(LOG_DEBUG, "\n[TEST] Validating use count persistence security...\n");
-    if (test_use_count_persistence(&suite) != 0) {
-        log_message(LOG_DEBUG, "❌ Use count persistence validation failed - security check failed\n");
-        // Restore pool state before returning
-        memcpy(&account_pool, &saved_pool, sizeof(AccountPool));
+    // Calculate Ethereum address
+    uint8_t hash[32];
+    keccak_256(serialized_pubkey + 1, 64, hash);
+
+    // Debug output for hash
+    log_message(LOG_DEBUG, "Keccak-256 hash (32 bytes):\n");
+    for (int i = 0; i < 32; i++) {
+        log_message(LOG_DEBUG, "%02x ", hash[i]);
+    }
+    log_message(LOG_DEBUG, "\n");
+
+    // Debug output for address bytes (last 20 bytes of hash)
+    log_message(LOG_DEBUG, "Address bytes (last 20 bytes of hash):\n");
+    for (int i = 12; i < 32; i++) {
+        log_message(LOG_DEBUG, "%02x ", hash[i]);
+    }
+    log_message(LOG_DEBUG, "\n");
+    
+    // Convert to Ethereum address format
+    char generated_address[43];
+    snprintf(generated_address, sizeof(generated_address), "0x");
+    for (int i = 12; i < 32; i++) {
+        snprintf(generated_address + 2 + (i-12)*2, 3, "%02x", hash[i]);
+    }
+    
+    // Compare addresses
+    if (strcmp(generated_address, expected_address) != 0) {
+        char error_msg[256];
+        snprintf(error_msg, sizeof(error_msg), 
+                "Address mismatch. Expected: %s, Got: %s", 
+                expected_address, generated_address);
+        secp256k1_context_destroy(ctx);
+        print_test_result(test_name, 0, error_msg);
+        return 0;
+    }
+    
+    secp256k1_context_destroy(ctx);
+    print_test_result(test_name, 1, NULL);
+    return 1;
+}
+
+int ecall_test_function() {
+    test_suite_t suite = {
+        "System Tests",
+        NULL,
+        0,
+        0
+    };
+    
+    // Allocate space for test results
+    suite.results = (test_result_t*)malloc(sizeof(test_result_t) * 10);
+    if (!suite.results) {
         return -1;
     }
-    log_message(LOG_DEBUG, "✅ Use count persistence validation passed - security checks confirmed\n");
-
-    // Restore original pool state
-    memcpy(&account_pool, &saved_pool, sizeof(AccountPool));
-
-    log_message(LOG_DEBUG, "\n=== System Validation Tests Completed Successfully ===\n");
-    log_message(LOG_DEBUG, "All security and functionality tests passed. The system is secure and ready for use.\n\n");
+    
+    // Run tests
+    suite.results[suite.result_count++] = (test_result_t){
+        "Find Account in Pool",
+        test_find_account_in_pool(&suite),
+        NULL
+    };
+    
+    suite.results[suite.result_count++] = (test_result_t){
+        "Load Account to Pool",
+        test_load_account_to_pool(&suite),
+        NULL
+    };
+    
+    suite.results[suite.result_count++] = (test_result_t){
+        "Unload Account from Pool",
+        test_unload_account_from_pool(&suite),
+        NULL
+    };
+    
+    suite.results[suite.result_count++] = (test_result_t){
+        "Generate Account in Pool",
+        test_generate_account_in_pool(&suite),
+        NULL
+    };
+    
+    suite.results[suite.result_count++] = (test_result_t){
+        "Sign with Pool Account",
+        test_sign_with_pool_account(&suite),
+        NULL
+    };
+    
+    suite.results[suite.result_count++] = (test_result_t){
+        "Get Pool Status",
+        test_get_pool_status(&suite),
+        NULL
+    };
+    
+    suite.results[suite.result_count++] = (test_result_t){
+        "Use Count Persistence",
+        test_use_count_persistence(&suite),
+        NULL
+    };
+    
+    // Add Keccak address generation test
+    suite.results[suite.result_count++] = (test_result_t){
+        "Keccak-256 Address Generation",
+        test_keccak_address_generation(&suite),
+        NULL
+    };
+    
+    // Print test suite summary
+    print_test_suite_summary(&suite);
+    
+    // Clean up
+    free(suite.results);
     
     return 0;
 }

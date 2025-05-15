@@ -84,7 +84,8 @@ App_Link_Flags := $(SGX_COMMON_CFLAGS) -L$(SGX_LIBRARY_PATH) -lsgx_urts -lsgx_ua
 Enclave_Cpp_Files := Enclave/Enclave.cpp
 Enclave_C_Files := lib/secp256k1/src/secp256k1.c \
                    lib/secp256k1/src/precomputed_ecmult.c \
-                   lib/secp256k1/src/precomputed_ecmult_gen.c
+                   lib/secp256k1/src/precomputed_ecmult_gen.c \
+                   Enclave/sha3.c
 
 Enclave_Include_Paths := -I$(SGX_SDK)/include -I$(SGX_SDK)/include/tlibc -IEnclave -Ilib/secp256k1/include -Ilib/secp256k1/src
 
@@ -186,6 +187,10 @@ Enclave/Enclave.o: Enclave/Enclave.cpp
 	@echo "CXX  <=  $<"
 
 # Rule for compiling .c files
+Enclave/sha3.o: Enclave/sha3.c
+	@$(CC) $(Enclave_C_Flags) -c $< -o $@
+	@echo "CC   <=  $<"
+
 %.o: %.c
 	@$(CC) $(Enclave_C_Flags) -c $< -o $@
 	@echo "CC   <=  $<"
