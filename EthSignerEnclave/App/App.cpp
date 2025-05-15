@@ -182,7 +182,6 @@ void list_account_files() {
 
 void print_help() {
     printf("\nAvailable commands:\n");
-    printf("  test_mode [on|off] - Enable/disable test mode\n");
     printf("  load_pool 0x1234...5678 - Load account to pool\n");
     printf("  unload_pool 0x1234...5678 - Unload account from pool\n");
     printf("  sign_pool 0x1234...5678 0000000000000000000000000000000000000000000000000000000000000001 - Sign with pool account\n");
@@ -236,7 +235,6 @@ int main(int argc, char *argv[]) {
     char arg[256];
     printf("Enter commands (type 'exit' to quit):\n");
     printf("Available commands:\n");
-    printf("  test_mode [on|off] - Enable/disable test mode\n");
     printf("  load_pool 0x1234...5678 - Load account to pool\n");
     printf("  unload_pool 0x1234...5678 - Unload account from pool\n");
     printf("  sign_pool 0x1234...5678 0000000000000000000000000000000000000000000000000000000000000001 - Sign with pool account\n");
@@ -266,19 +264,7 @@ int main(int argc, char *argv[]) {
         } else {
             arg[0] = '\0';
         }
-
-        if (strcmp(command, "test_mode") == 0) {
-            if (strcmp(arg, "on") == 0) {
-                set_test_mode(true);
-                printf("Test mode enabled\n");
-            } else if (strcmp(arg, "off") == 0) {
-                set_test_mode(false);
-                printf("Test mode disabled\n");
-            } else {
-                printf("Usage: test_mode [on|off]\n");
-            }
-        }
-        else if (strcmp(command, "load_pool") == 0) {
+        if (strcmp(command, "load_pool") == 0) {
             if (strlen(arg) < 42 || strncmp(arg, "0x", 2) != 0) {
                 printf("Error: Invalid Ethereum address format. Expected: 0x followed by 40 hex characters\n");
                 continue;
