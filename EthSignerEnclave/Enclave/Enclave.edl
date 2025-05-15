@@ -40,9 +40,9 @@ enclave {
         public int ecall_generate_account_to_pool([out, size=42] char* account_address);
 
         // Test functions
-        public int ecall_test_entropy([out, size=size] uint8_t* entropy, size_t size);
-        public int ecall_test_save_load();
-        public int ecall_test_sign_verify();
+        // public int ecall_test_entropy([out, size=size] uint8_t* entropy, size_t size);
+        // public int ecall_test_save_load();
+        // public int ecall_test_sign_verify();
 
         public int ecall_set_log_level(int level);
     };
