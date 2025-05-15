@@ -24,7 +24,7 @@ extern void* g_global_data;
 extern void* g_peak_heap_used;
 extern void* g_peak_rsrv_mem_committed;
 
-#define MAX_ACCOUNTS 10  // Максимальное количество одновременно открытых аккаунтов
+#define MAX_ACCOUNTS 1000  // Максимальное количество одновременно открытых аккаунтов
 #define ACCOUNT_CACHE_TIMEOUT 300  // Таймаут кэша в секундах
 
 // Константы для проверки слабых ключей
