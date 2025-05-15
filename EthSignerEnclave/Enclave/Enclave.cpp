@@ -319,9 +319,14 @@ void keccak_256(const uint8_t* input, size_t input_len, uint8_t* output) {
     memcpy(output, hash, 32);
 }
 
-// Enhanced account generation
-int ecall_generate_account(void) {
+// Internal function to generate account
+static int generate_account(Account* account) {
     log_message(LOG_INFO, "Starting account generation...\n");
+    
+    if (!account) {
+        log_message(LOG_ERROR, "Invalid account parameter\n");
+        return -1;
+    }
     
     uint8_t private_key[32] = {0};
     sgx_status_t status = generate_secure_private_key(private_key, sizeof(private_key));
@@ -366,15 +371,15 @@ int ecall_generate_account(void) {
     log_message(LOG_DEBUG, "Ethereum address calculated\n");
     
     // Store the account data
-    memcpy(current_account.private_key, private_key, sizeof(private_key));
-    memcpy(current_account.public_key, serialized_pubkey, sizeof(serialized_pubkey));
-    memcpy(current_account.address, address, sizeof(address));
-    current_account.use_count = 0;
-    current_account.is_initialized = true;
+    memcpy(account->private_key, private_key, sizeof(private_key));
+    memcpy(account->public_key, serialized_pubkey, sizeof(serialized_pubkey));
+    memcpy(account->address, address, sizeof(address));
+    account->use_count = 0;
+    account->is_initialized = true;
     log_message(LOG_DEBUG, "Account data stored\n");
     
     // Calculate HMAC
-    sgx_status_t hmac_status = sgx_sha256_msg((const uint8_t*)&current_account, sizeof(Account) - 32, (sgx_sha256_hash_t*)current_account.hmac);
+    sgx_status_t hmac_status = sgx_sha256_msg((const uint8_t*)account, sizeof(Account) - 32, (sgx_sha256_hash_t*)account->hmac);
     if (hmac_status != SGX_SUCCESS) {
         log_message(LOG_ERROR, "Failed to calculate HMAC\n");
         secp256k1_context_destroy(ctx);
@@ -383,27 +388,6 @@ int ecall_generate_account(void) {
     log_message(LOG_DEBUG, "HMAC calculated\n");
 
     secp256k1_context_destroy(ctx);
-    
-    // Save account state immediately
-    log_message(LOG_INFO, "Saving account state...\n");
-    
-    // Format and log the account address
-    char address_str[43];
-    snprintf(address_str, sizeof(address_str), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
-             current_account.address[0], current_account.address[1], current_account.address[2], current_account.address[3],
-             current_account.address[4], current_account.address[5], current_account.address[6], current_account.address[7],
-             current_account.address[8], current_account.address[9], current_account.address[10], current_account.address[11],
-             current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
-             current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
-    log_message(LOG_ERROR, "Generated account address: %s\n", address_str);
-    
-    int save_result = ecall_save_account("default");
-    if (save_result != 0) {
-        log_message(LOG_ERROR, "Failed to save account state\n");
-        return -1;
-    }
-    log_message(LOG_DEBUG, "Account state saved successfully\n");
-    
     log_message(LOG_INFO, "Account generation completed successfully\n");
     return 0;
 }
@@ -747,7 +731,7 @@ static int test_find_account_in_pool(test_suite_t* suite) {
     
     // Test 2: Add test account to pool
     log_message(LOG_DEBUG, "[TEST] Setting up test environment...\n");
-    if (ecall_generate_account() != 0) {
+    if (generate_account(&current_account) != 0) {
         print_test_result("Test environment setup", 0, "Failed to set up test environment");
         return -1;
     }
@@ -786,7 +770,7 @@ static int test_load_account_to_pool(test_suite_t* suite) {
     
     // Test 2: Generate and load test account
     log_message(LOG_DEBUG, "[TEST] Setting up test environment...\n");
-    if (ecall_generate_account() != 0) {
+    if (generate_account(&current_account) != 0) {
         print_test_result("Test environment setup", 0, "Failed to set up test environment");
         return -1;
     }
@@ -842,7 +826,7 @@ static int test_unload_account_from_pool(test_suite_t* suite) {
     
     // Test 3: Generate, load and unload test account
     log_message(LOG_INFO, "\nTest 3: Generate, load and unload test account...\n");
-    if (ecall_generate_account() != 0) {
+    if (generate_account(&current_account) != 0) {
         log_message(LOG_ERROR, "Failed to generate test account\n");
         return -1;
     }
@@ -889,7 +873,7 @@ static int test_generate_account_in_pool(test_suite_t* suite) {
     log_message(LOG_INFO, "\nTesting account generation and pool loading...\n");
     
     // Test 1: Generate account
-    if (ecall_generate_account() != 0) {
+    if (generate_account(&current_account) != 0) {
         print_test_result("Generate account", 0, "Failed to generate account");
         return -1;
     }
@@ -946,7 +930,7 @@ static int test_sign_with_pool_account(test_suite_t* suite) {
     
     // Test 2: Generate, load and sign with test account
     log_message(LOG_INFO, "\nGenerating test account...\n");
-    if (ecall_generate_account() != 0) {
+    if (generate_account(&current_account) != 0) {
         print_test_result("Generate test account", 0, "Failed to generate test account");
         return -1;
     }
@@ -1059,7 +1043,7 @@ static int test_get_pool_status(test_suite_t* suite) {
                      "Expected empty pool status");
     
     // Test 2: Add an account to pool
-    if (ecall_generate_account() != 0) {
+    if (generate_account(&current_account) != 0) {
         print_test_result("Generate test account", 0, "Failed to generate test account");
         return -1;
     }
@@ -1125,7 +1109,7 @@ static int test_use_count_persistence(test_suite_t* suite) {
     log_message(LOG_INFO, "\nTesting use_count persistence...\n");
     
     // Test 1: Generate account
-    if (ecall_generate_account() != 0) {
+    if (generate_account(&current_account) != 0) {
         print_test_result("Generate test account", 0, "Failed to generate test account");
         return -1;
     }
@@ -1568,7 +1552,7 @@ int ecall_test_save_load(void) {
     log_message(LOG_INFO, "Testing save/load cycle...\n");
     
     // Generate test account
-    if (ecall_generate_account() != 0) {
+    if (generate_account(&current_account) != 0) {
         log_message(LOG_ERROR, "Failed to generate test account\n");
         return -1;
     }
@@ -1617,7 +1601,7 @@ int ecall_test_sign_verify(void) {
     
     // Generate test account if not exists
     if (!current_account.is_initialized) {
-        if (ecall_generate_account() != 0) {
+        if (generate_account(&current_account) != 0) {
             log_message(LOG_ERROR, "Failed to generate test account\n");
             return -1;
         }
@@ -1699,7 +1683,8 @@ int ecall_generate_account_to_pool(char* account_address) {
     }
 
     // Generate new account
-    if (ecall_generate_account() != 0) {
+    Account new_account = {0};
+    if (generate_account(&new_account) != 0) {
         log_message(LOG_ERROR, "Failed to generate account\n");
         return -1;
     }
@@ -1707,18 +1692,11 @@ int ecall_generate_account_to_pool(char* account_address) {
 
     // Format address as hex string
     snprintf(account_address, 43, "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
-             current_account.address[0], current_account.address[1], current_account.address[2], current_account.address[3],
-             current_account.address[4], current_account.address[5], current_account.address[6], current_account.address[7],
-             current_account.address[8], current_account.address[9], current_account.address[10], current_account.address[11],
-             current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
-             current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
-
-    // Save account using its address as filename
-    if (ecall_save_account(account_address) != 0) {
-        log_message(LOG_ERROR, "Failed to save account\n");
-        return -1;
-    }
-    log_message(LOG_INFO, "Account saved successfully\n");
+             new_account.address[0], new_account.address[1], new_account.address[2], new_account.address[3],
+             new_account.address[4], new_account.address[5], new_account.address[6], new_account.address[7],
+             new_account.address[8], new_account.address[9], new_account.address[10], new_account.address[11],
+             new_account.address[12], new_account.address[13], new_account.address[14], new_account.address[15],
+             new_account.address[16], new_account.address[17], new_account.address[18], new_account.address[19]);
 
     // Find free slot in pool
     int free_slot = -1;
@@ -1736,7 +1714,7 @@ int ecall_generate_account_to_pool(char* account_address) {
     log_message(LOG_INFO, "Found free slot at index %d\n", free_slot);
 
     // Copy account to pool
-    memcpy(&account_pool.accounts[free_slot].account, &current_account, sizeof(Account));
+    memcpy(&account_pool.accounts[free_slot].account, &new_account, sizeof(Account));
     account_pool.accounts[free_slot].account.use_count = 0;
     log_message(LOG_INFO, "Account copied to pool at index %d\n", free_slot);
 
