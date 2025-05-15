@@ -21,7 +21,7 @@
 #define LOG_DEBUG 3
 
 // Default log level
-static int g_log_level = LOG_WARNING;
+static int g_log_level = LOG_DEBUG;
 
 // Logging function
 static void log_message(int level, const char* format, ...) {
@@ -514,14 +514,9 @@ int ecall_save_account(const char* account_id) {
     }
     log_message(LOG_DEBUG, "Data sealed successfully\n");
 
-    // Save encrypted data using Ethereum address as filename
+    // Save encrypted data using provided account_id as filename
     char filename[256];
-    snprintf(filename, sizeof(filename), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x.account",
-             current_account.address[0], current_account.address[1], current_account.address[2], current_account.address[3],
-             current_account.address[4], current_account.address[5], current_account.address[6], current_account.address[7],
-             current_account.address[8], current_account.address[9], current_account.address[10], current_account.address[11],
-             current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
-             current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
+    snprintf(filename, sizeof(filename), "%s.account", account_id);
     
     int ret = 0;
     status = ocall_save_to_file(&ret, sealed_data, sealed_size, filename);
@@ -796,13 +791,7 @@ static int test_load_account_to_pool(test_suite_t* suite) {
         return -1;
     }
     
-    // Save account to get its address
-    if (ecall_save_account("default") != 0) {
-        print_test_result("Test account preparation", 0, "Failed to prepare test account");
-        return -1;
-    }
-    
-    // Load account to pool
+    // Create account_id from address
     char account_id[43];
     snprintf(account_id, sizeof(account_id), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
              current_account.address[0], current_account.address[1], current_account.address[2], current_account.address[3],
@@ -811,6 +800,13 @@ static int test_load_account_to_pool(test_suite_t* suite) {
              current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
              current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
     
+    // Save account using its address as filename
+    if (ecall_save_account(account_id) != 0) {
+        print_test_result("Test account preparation", 0, "Failed to prepare test account");
+        return -1;
+    }
+    
+    // Load account to pool
     result = ecall_load_account_to_pool(account_id);
     print_test_result("Valid account loading", result >= 0, "Security check passed: valid account loaded successfully");
     if (result < 0) {
@@ -851,14 +847,8 @@ static int test_unload_account_from_pool(test_suite_t* suite) {
         return -1;
     }
     
-    // Save account to get its address
-    if (ecall_save_account("default") != 0) {
-        log_message(LOG_ERROR, "Failed to save test account\n");
-        return -1;
-    }
-    
-    // Load account to pool
-    char account_id[43]; // 0x + 40 hex chars + null terminator
+    // Create account_id from address
+    char account_id[43];
     snprintf(account_id, sizeof(account_id), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
              current_account.address[0], current_account.address[1], current_account.address[2], current_account.address[3],
              current_account.address[4], current_account.address[5], current_account.address[6], current_account.address[7],
@@ -866,6 +856,13 @@ static int test_unload_account_from_pool(test_suite_t* suite) {
              current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
              current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
     
+    // Save account using its address as filename
+    if (ecall_save_account(account_id) != 0) {
+        log_message(LOG_ERROR, "Failed to save test account\n");
+        return -1;
+    }
+    
+    // Load account to pool
     if (ecall_load_account_to_pool(account_id) < 0) {
         log_message(LOG_ERROR, "Failed to load account to pool\n");
         return -1;
@@ -898,12 +895,6 @@ static int test_generate_account_in_pool(test_suite_t* suite) {
     }
     print_test_result("Generate account", 1, NULL);
 
-    // Save account to get its address
-    if (ecall_save_account("default") != 0) {
-        print_test_result("Save account", 0, "Failed to save test account");
-        return -1;
-    }
-
     // Create account_id from address
     char account_id[43];
     snprintf(account_id, sizeof(account_id), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
@@ -912,6 +903,12 @@ static int test_generate_account_in_pool(test_suite_t* suite) {
              current_account.address[8], current_account.address[9], current_account.address[10], current_account.address[11],
              current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
              current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
+
+    // Save account using its address as filename
+    if (ecall_save_account(account_id) != 0) {
+        print_test_result("Save account", 0, "Failed to save test account");
+        return -1;
+    }
 
     // Test 2: Load account to pool
     int pool_index = ecall_load_account_to_pool(account_id);
@@ -954,12 +951,6 @@ static int test_sign_with_pool_account(test_suite_t* suite) {
         return -1;
     }
     
-    // Save account to get its address
-    if (ecall_save_account("default") != 0) {
-        print_test_result("Save test account", 0, "Failed to save test account");
-        return -1;
-    }
-    
     // Create account_id from address
     char account_id[43];
     snprintf(account_id, sizeof(account_id), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
@@ -968,6 +959,12 @@ static int test_sign_with_pool_account(test_suite_t* suite) {
              current_account.address[8], current_account.address[9], current_account.address[10], current_account.address[11],
              current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
              current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
+    
+    // Save account using its address as filename
+    if (ecall_save_account(account_id) != 0) {
+        print_test_result("Save test account", 0, "Failed to save test account");
+        return -1;
+    }
     
     // Load account to pool
     int pool_index = ecall_load_account_to_pool(account_id);
@@ -1068,12 +1065,6 @@ static int test_get_pool_status(test_suite_t* suite) {
     }
     print_test_result("Generate test account", 1, NULL);
 
-    // Save account to get its address
-    if (ecall_save_account("default") != 0) {
-        print_test_result("Save test account", 0, "Failed to save test account");
-        return -1;
-    }
-
     // Create account_id from address
     char account_id[43];
     snprintf(account_id, sizeof(account_id), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
@@ -1082,6 +1073,12 @@ static int test_get_pool_status(test_suite_t* suite) {
              current_account.address[8], current_account.address[9], current_account.address[10], current_account.address[11],
              current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
              current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
+
+    // Save account using its address as filename
+    if (ecall_save_account(account_id) != 0) {
+        print_test_result("Save test account", 0, "Failed to save test account");
+        return -1;
+    }
 
     // Load account to pool
     int pool_index = ecall_load_account_to_pool(account_id);
@@ -1732,6 +1729,21 @@ int ecall_generate_account_to_pool(char* account_address) {
     }
     log_message(LOG_INFO, "Account generated successfully\n");
 
+    // Format address as hex string
+    snprintf(account_address, 43, "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
+             current_account.address[0], current_account.address[1], current_account.address[2], current_account.address[3],
+             current_account.address[4], current_account.address[5], current_account.address[6], current_account.address[7],
+             current_account.address[8], current_account.address[9], current_account.address[10], current_account.address[11],
+             current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
+             current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
+
+    // Save account using its address as filename
+    if (ecall_save_account(account_address) != 0) {
+        log_message(LOG_ERROR, "Failed to save account\n");
+        return -1;
+    }
+    log_message(LOG_INFO, "Account saved successfully\n");
+
     // Find free slot in pool
     int free_slot = -1;
     for (int i = 0; i < MAX_POOL_SIZE; i++) {
@@ -1751,14 +1763,6 @@ int ecall_generate_account_to_pool(char* account_address) {
     memcpy(&account_pool.accounts[free_slot].account, &current_account, sizeof(Account));
     account_pool.accounts[free_slot].account.use_count = 0;
     log_message(LOG_INFO, "Account copied to pool at index %d\n", free_slot);
-
-    // Format address as hex string
-    snprintf(account_address, 43, "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
-             current_account.address[0], current_account.address[1], current_account.address[2], current_account.address[3],
-             current_account.address[4], current_account.address[5], current_account.address[6], current_account.address[7],
-             current_account.address[8], current_account.address[9], current_account.address[10], current_account.address[11],
-             current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
-             current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
 
     log_message(LOG_INFO, "Account successfully generated in pool at index %d\n", free_slot);
     return free_slot;

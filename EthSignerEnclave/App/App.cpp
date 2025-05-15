@@ -182,9 +182,6 @@ void list_account_files() {
 
 void print_help() {
     printf("\nAvailable commands:\n");
-    printf("  generate_account - Generate a new Ethereum account\n");
-    printf("  load_account 0x1234...5678 - Load account by Ethereum address\n");
-    printf("  sign_tx 0000000000000000000000000000000000000000000000000000000000000001 - Sign a transaction\n");
     printf("  test_key_strength - Test private key generation and strength\n");
     printf("  test_entropy - Test entropy generation\n");
     printf("  test_save_load - Test the save/load cycle\n");
@@ -243,9 +240,6 @@ int main(int argc, char *argv[]) {
     char arg[256];
     printf("Enter commands (type 'exit' to quit):\n");
     printf("Available commands:\n");
-    printf("  generate_account - Generate a new Ethereum account\n");
-    printf("  load_account 0x1234...5678 - Load account by Ethereum address\n");
-    printf("  sign_tx 0000000000000000000000000000000000000000000000000000000000000001 - Sign a transaction\n");
     printf("  test_key_strength - Test private key generation and strength\n");
     printf("  test_entropy - Test entropy generation\n");
     printf("  test_save_load - Test the save/load cycle\n");
@@ -281,54 +275,7 @@ int main(int argc, char *argv[]) {
             arg[0] = '\0';
         }
 
-        if (strcmp(command, "generate_account") == 0) {
-            status = ecall_generate_account(global_eid, &retval);
-            if (status != SGX_SUCCESS || retval != 0) {
-                printf("Error: Failed to generate account\n");
-                continue;
-            }
-            printf("Account generated successfully\n");
-        }
-        else if (strcmp(command, "load_account") == 0) {
-            if (strlen(arg) < 42 || strncmp(arg, "0x", 2) != 0) {
-                printf("Error: Invalid Ethereum address format. Expected: 0x followed by 40 hex characters\n");
-                continue;
-            }
-            status = ecall_load_account(global_eid, &retval, arg);
-            if (status != SGX_SUCCESS || retval != 0) {
-                printf("Error: Failed to load account\n");
-                continue;
-            }
-            printf("Account loaded successfully\n");
-        }
-        else if (strcmp(command, "sign_tx") == 0) {
-            if (strlen(arg) != 64) {
-                printf("Error: Transaction hash must be 64 hex characters\n");
-                continue;
-            }
-
-            // Convert hex string to bytes
-            uint8_t tx_hash[32];
-            for (int i = 0; i < 32; i++) {
-                char byte_str[3] = {arg[i*2], arg[i*2+1], '\0'};
-                tx_hash[i] = (uint8_t)strtol(byte_str, NULL, 16);
-            }
-
-            uint8_t signature[64];
-            status = ecall_sign_transaction(global_eid, &retval, tx_hash, sizeof(tx_hash), signature, sizeof(signature));
-            if (status != SGX_SUCCESS || retval != 0) {
-                printf("Error: Failed to sign transaction\n");
-                continue;
-            }
-
-            // Print signature in hex
-            printf("Signature: ");
-            for (int i = 0; i < 64; i++) {
-                printf("%02x", signature[i]);
-            }
-            printf("\n");
-        }
-        else if (strcmp(command, "test_key_strength") == 0) {
+        if (strcmp(command, "test_key_strength") == 0) {
             printf("Testing key strength...\n");
             uint8_t private_key[32];
             status = ecall_generate_private_key(global_eid, &retval, private_key, sizeof(private_key));
