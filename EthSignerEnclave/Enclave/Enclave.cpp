@@ -180,13 +180,6 @@ bool is_strong_private_key(const uint8_t* private_key, size_t size) {
         return false;
     }
     
-    // Print first few bytes of the key for debugging
-    log_message(LOG_DEBUG, "Key bytes (first 8): ");
-    for (int i = 0; i < 8; i++) {
-        log_message(LOG_DEBUG, "%02x ", private_key[i]);
-    }
-    log_message(LOG_DEBUG, "\n");
-    
     // Create secp256k1 context for verification
     secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
     if (!ctx) {
