@@ -13,21 +13,11 @@ enclave {
         public int ecall_generate_private_key([out, size=32] uint8_t* private_key,
                                            size_t private_key_size);
 
-        // Сохранение приватного ключа в энклаве
-        public int ecall_store_private_key([in, size=32] const uint8_t* private_key,
-                                        size_t private_key_size);
-
         // Упрощенная подпись (без передачи приватного ключа)
         public int ecall_sign_transaction([in, size=32] const uint8_t* tx_hash,
                                       size_t tx_hash_size,
                                       [out, size=64] uint8_t* signature,
                                       size_t signature_size);
-
-        // Новая функция для подписи с приватным ключом внутри энклава
-        public int ecall_sign_with_stored_key([in, size=tx_hash_size] const uint8_t* tx_hash,
-                                           size_t tx_hash_size,
-                                           [out, size=signature_size] uint8_t* signature,
-                                           size_t signature_size);
 
         // Account management functions
         public int ecall_generate_account(void);
@@ -48,9 +38,6 @@ enclave {
 
         // Новая функция для генерации аккаунта в пул
         public int ecall_generate_account_to_pool([out, size=42] char* account_address);
-
-        // Test functions
-        public int ecall_save_test_account();
 
         // Test functions
         public int ecall_test_entropy([out, size=size] uint8_t* entropy, size_t size);

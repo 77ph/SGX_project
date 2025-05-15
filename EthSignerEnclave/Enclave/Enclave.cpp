@@ -1312,24 +1312,6 @@ int ecall_generate_private_key(uint8_t* private_key, size_t private_key_size) {
     return generate_secure_private_key(private_key, private_key_size) == SGX_SUCCESS ? 0 : -1;
 }
 
-// Stub implementations for functions still declared in Enclave.edl
-int ecall_store_private_key(const uint8_t* private_key, size_t private_key_size) {
-    log_message(LOG_WARNING, "WARNING: ecall_store_private_key is deprecated\n");
-    return -1;
-}
-
-int ecall_sign_with_stored_key(const uint8_t* tx_hash, size_t tx_hash_size,
-                             uint8_t* signature, size_t signature_size) {
-    log_message(LOG_WARNING, "WARNING: ecall_sign_with_stored_key is deprecated\n");
-    return -1;
-}
-
-int ecall_sign_with_account(const uint8_t* message_hash, size_t message_hash_len,
-                          uint8_t* signature, size_t signature_len) {
-    log_message(LOG_WARNING, "WARNING: ecall_sign_with_account is deprecated\n");
-    return -1;
-}
-
 int ecall_load_account_to_pool(const char* account_id) {
     log_message(LOG_DEBUG, "[TEST] Loading account %s to pool...\n", account_id);
     
@@ -1563,12 +1545,6 @@ int ecall_get_pool_status(uint32_t* total_accounts, uint32_t* active_accounts, c
     return 0;
 }
 
-int ecall_save_test_account() {
-    log_message(LOG_WARNING, "WARNING: ecall_save_test_account is deprecated\n");
-    return -1;
-}
-
-// Test functions
 int ecall_test_entropy(uint8_t* entropy, size_t size) {
     log_message(LOG_INFO, "Testing entropy generation...\n");
     if (!entropy || size != 128) {

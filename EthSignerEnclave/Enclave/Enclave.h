@@ -94,9 +94,6 @@ int ecall_load_account_to_pool(const char* account_id);
 int ecall_unload_account_from_pool(const char* account_id);
 int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message, size_t message_len, uint8_t* signature, size_t signature_len);
 
-// Test functions
-int ecall_save_test_account();
-
 // Структура для статистики байтов
 typedef struct {
     uint8_t byte_counts[256];
