@@ -297,7 +297,7 @@ Account* get_current_account(void) {
 void keccak_256(const uint8_t* input, size_t input_len, uint8_t* output) {
     sha3_context ctx;
     sha3_Init256(&ctx);
-    sha3_SetFlags(&ctx, SHA3_FLAGS_KECCAK); // ← 🔥 Включаем правильный режим!
+    sha3_SetFlags(&ctx, SHA3_FLAGS_KECCAK); // correct
     sha3_Update(&ctx, input, input_len);
     const uint8_t* hash = (const uint8_t*)sha3_Finalize(&ctx);
     memcpy(output, hash, 32);
