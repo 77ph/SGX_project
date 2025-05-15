@@ -127,9 +127,6 @@ sgx_status_t sgx_ecall_initialize() {
 
 // Security constants
 // MIN_ENTROPY_BITS is defined in Enclave.h
-#define KEY_GENERATION_MAX_ATTEMPTS 100
-#define MIN_PRIVATE_KEY_VALUE 0x1000000000000000ULL
-#define MAX_PRIVATE_KEY_VALUE 0xFFFFFFFFFFFFFFFFULL
 
 // Helper function to securely zero memory
 void secure_memzero(void* ptr, size_t len) {
