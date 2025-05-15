@@ -182,10 +182,6 @@ void list_account_files() {
 
 void print_help() {
     printf("\nAvailable commands:\n");
-    printf("  test_key_strength - Test private key generation and strength\n");
-    printf("  test_entropy - Test entropy generation\n");
-    printf("  test_save_load - Test the save/load cycle\n");
-    printf("  test_sign_verify - Test transaction signing and verification\n");
     printf("  test_mode [on|off] - Enable/disable test mode\n");
     printf("  load_pool 0x1234...5678 - Load account to pool\n");
     printf("  unload_pool 0x1234...5678 - Unload account from pool\n");
@@ -240,10 +236,6 @@ int main(int argc, char *argv[]) {
     char arg[256];
     printf("Enter commands (type 'exit' to quit):\n");
     printf("Available commands:\n");
-    printf("  test_key_strength - Test private key generation and strength\n");
-    printf("  test_entropy - Test entropy generation\n");
-    printf("  test_save_load - Test the save/load cycle\n");
-    printf("  test_sign_verify - Test transaction signing and verification\n");
     printf("  test_mode [on|off] - Enable/disable test mode\n");
     printf("  load_pool 0x1234...5678 - Load account to pool\n");
     printf("  unload_pool 0x1234...5678 - Unload account from pool\n");
@@ -275,54 +267,7 @@ int main(int argc, char *argv[]) {
             arg[0] = '\0';
         }
 
-        if (strcmp(command, "test_key_strength") == 0) {
-            printf("Testing key strength...\n");
-            uint8_t private_key[32];
-            status = ecall_generate_private_key(global_eid, &retval, private_key, sizeof(private_key));
-            if (status != SGX_SUCCESS || retval != 0) {
-                printf("Error: Failed to generate test key\n");
-                continue;
-            }
-            printf("Test key generated successfully\n");
-            printf("First 8 bytes: ");
-            for (int i = 0; i < 8; i++) {
-                printf("%02x ", private_key[i]);
-            }
-            printf("\n");
-        }
-        else if (strcmp(command, "test_entropy") == 0) {
-            printf("Testing entropy generation...\n");
-            uint8_t entropy[128];
-            status = ecall_test_entropy(global_eid, &retval, entropy, sizeof(entropy));
-            if (status != SGX_SUCCESS || retval != 0) {
-                printf("Error: Failed to generate test entropy\n");
-                continue;
-            }
-            printf("Test entropy generated successfully\n");
-            printf("First 16 bytes: ");
-            for (int i = 0; i < 16; i++) {
-                printf("%02x ", entropy[i]);
-            }
-            printf("\n");
-        }
-        else if (strcmp(command, "test_save_load") == 0) {
-            printf("Testing save/load cycle...\n");
-            status = ecall_test_save_load(global_eid, &retval);
-            if (status != SGX_SUCCESS || retval != 0) {
-                printf("Error: Save/load test failed\n");
-                continue;
-            }
-            printf("Save/load test completed successfully\n");
-        }
-        else if (strcmp(command, "test_sign_verify") == 0) {
-            status = ecall_test_sign_verify(global_eid, &retval);
-            if (status != SGX_SUCCESS || retval != 0) {
-                printf("Error: Test sign/verify failed\n");
-                continue;
-            }
-            printf("Test sign/verify completed successfully\n");
-        }
-        else if (strcmp(command, "test_mode") == 0) {
+        if (strcmp(command, "test_mode") == 0) {
             if (strcmp(arg, "on") == 0) {
                 set_test_mode(true);
                 printf("Test mode enabled\n");
