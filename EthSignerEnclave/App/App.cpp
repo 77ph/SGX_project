@@ -147,49 +147,6 @@ int initialize_enclave(void) {
     return 0;
 }
 
-void print_usage() {
-    printf("Usage:\n");
-    printf("  generate_account - Generate new account\n");
-    printf("  save_account_state - Save current account state\n");
-    printf("  load_account_state - Load account state\n");
-    printf("  sign_tx <tx_hash> - Sign transaction hash (32 bytes in hex)\n");
-    printf("  load_account_to_pool <account_id> - Load account to pool\n");
-    printf("  unload_account_from_pool <account_id> - Unload account from pool\n");
-    printf("  sign_with_pool <account_id> <tx_hash> - Sign transaction with pool account\n");
-    printf("  get_pool_status - Get pool status\n");
-}
-
-// Функция для получения списка аккаунтов на диске
-std::vector<std::string> get_accounts_from_disk() {
-    std::vector<std::string> accounts;
-    DIR* dir;
-    struct dirent* ent;
-    const char* dir_path = g_is_test_mode ? "test_accounts" : "accounts";
-    
-    if ((dir = opendir(dir_path)) != NULL) {
-        while ((ent = readdir(dir)) != NULL) {
-            // Пропускаем . и ..
-            if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0) {
-                continue;
-            }
-            
-            std::string filename = ent->d_name;
-            
-            // Проверяем, что это файл аккаунта (заканчивается на .account)
-            if (filename.length() > 8) {
-                std::string extension = filename.substr(filename.length() - 8);
-                if (extension == ".account") {
-                    // Убираем расширение .account
-                    std::string account_id = filename.substr(0, filename.length() - 8);
-                    accounts.push_back(account_id);
-                }
-            }
-        }
-        closedir(dir);
-    }
-    return accounts;
-}
-
 // Функция для получения списка аккаунтов на диске
 void list_account_files() {
     const char* dir_path = g_is_test_mode ? "test_accounts" : "accounts";
@@ -199,22 +156,28 @@ void list_account_files() {
         printf("Error: Cannot create directory %s\n", dir_path);
         return;
     }
-
-    DIR* dir = opendir(dir_path);
-    if (dir == NULL) {
-        printf("Error: Cannot open %s directory\n", dir_path);
-        return;
-    }
-
+    
+    DIR* dir;
     struct dirent* entry;
-    while ((entry = readdir(dir)) != NULL) {
-        // Пропускаем . и ..
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-            continue;
+    
+    if ((dir = opendir(dir_path)) != NULL) {
+        printf("\nAccount files in %s/:\n", dir_path);
+        while ((entry = readdir(dir)) != NULL) {
+            // Пропускаем . и ..
+            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+                continue;
+            }
+            
+            // Проверяем, что это файл аккаунта (заканчивается на .account)
+            size_t len = strlen(entry->d_name);
+            if (len > 8 && strcmp(entry->d_name + len - 8, ".account") == 0) {
+                printf("  %s\n", entry->d_name);
+            }
         }
-        printf("  %s\n", entry->d_name);
+        closedir(dir);
+    } else {
+        printf("Error: Cannot open directory %s\n", dir_path);
     }
-    closedir(dir);
 }
 
 void print_help() {
