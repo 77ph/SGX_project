@@ -392,6 +392,68 @@ static int generate_account(Account* account) {
     return 0;
 }
 
+// Internal function to save account to pool
+static int save_account_to_pool(const char* account_id, const Account* account) {
+    log_message(LOG_INFO, "Saving account with ID: %s to pool\n", account_id);
+    
+    if (!account || !account->is_initialized) {
+        log_message(LOG_ERROR, "Account is not initialized\n");
+        return -1;
+    }
+
+    // Create structure for saving
+    AccountFile data;
+    memcpy(&data.account, account, sizeof(Account));
+    log_message(LOG_DEBUG, "Account data copied to save structure\n");
+
+    // Calculate HMAC
+    uint8_t computed_hash[32];
+    sgx_status_t status = sgx_sha256_msg((const uint8_t*)&data, sizeof(AccountFile) - 32, (sgx_sha256_hash_t*)computed_hash);
+    if (status != SGX_SUCCESS) {
+        log_message(LOG_ERROR, "Failed to calculate HMAC: %d\n", status);
+        return -1;
+    }
+    memcpy(data.file_hmac, computed_hash, 32);
+    log_message(LOG_DEBUG, "HMAC calculated and stored\n");
+
+    // Encrypt data
+    size_t sealed_size = sgx_calc_sealed_data_size(0, sizeof(AccountFile));
+    if (sealed_size == UINT32_MAX) {
+        log_message(LOG_ERROR, "Failed to calculate sealed data size\n");
+        return -1;
+    }
+
+    uint8_t* sealed_data = (uint8_t*)malloc(sealed_size);
+    if (!sealed_data) {
+        log_message(LOG_ERROR, "Failed to allocate memory for sealed data\n");
+        return -1;
+    }
+
+    status = sgx_seal_data(0, NULL, sizeof(AccountFile), (uint8_t*)&data, sealed_size, (sgx_sealed_data_t*)sealed_data);
+    if (status != SGX_SUCCESS) {
+        log_message(LOG_ERROR, "Failed to seal data: %d\n", status);
+        free(sealed_data);
+        return -1;
+    }
+    log_message(LOG_DEBUG, "Data sealed successfully\n");
+
+    // Save encrypted data using provided account_id as filename
+    char filename[256];
+    snprintf(filename, sizeof(filename), "%s.account", account_id);
+    
+    int ret = 0;
+    status = ocall_save_to_file(&ret, sealed_data, sealed_size, filename);
+    free(sealed_data);
+    
+    if (status != SGX_SUCCESS || ret != 0) {
+        log_message(LOG_ERROR, "Failed to save file: status=%d, ret=%d\n", status, ret);
+        return -1;
+    }
+    
+    log_message(LOG_INFO, "Account saved successfully to %s\n", filename);
+    return 0;
+}
+
 // Enhanced transaction signing with security checks
 int ecall_sign_transaction(const uint8_t* tx_hash, size_t tx_hash_size,
                           uint8_t* signature, size_t signature_size) {
@@ -440,7 +502,7 @@ int ecall_sign_transaction(const uint8_t* tx_hash, size_t tx_hash_size,
     log_message(LOG_INFO, "Use count incremented to %u\n", current_account.use_count);
 
     // Save account state to persist use_count
-    int save_result = ecall_save_account("default");
+    int save_result = save_account_to_pool("default", &current_account);
     if (save_result != 0) {
         log_message(LOG_ERROR, "Failed to save account state after signing\n");
         secp256k1_context_destroy(ctx);
@@ -514,6 +576,8 @@ int ecall_save_account(const char* account_id) {
     log_message(LOG_INFO, "Account saved successfully to %s\n", filename);
     return 0;
 }
+
+
 
 int ecall_load_account(const char* account_id) {
     log_message(LOG_INFO, "Loading account with ID: %s\n", account_id);
@@ -670,7 +734,7 @@ int ecall_sign_message(const uint8_t* message, size_t message_len, uint8_t* sign
     log_message(LOG_INFO, "Use count incremented to %u\n", current_account.use_count);
 
     // Save account state to persist use_count
-    int save_result = ecall_save_account("default");
+    int save_result = save_account_to_pool("default", &current_account);
     if (save_result != 0) {
         log_message(LOG_ERROR, "Failed to save account state after signing\n");
         secp256k1_context_destroy(ctx);
@@ -785,7 +849,7 @@ static int test_load_account_to_pool(test_suite_t* suite) {
              current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
     
     // Save account using its address as filename
-    if (ecall_save_account(account_id) != 0) {
+    if (save_account_to_pool(account_id, &current_account) != 0) {
         print_test_result("Test account preparation", 0, "Failed to prepare test account");
         return -1;
     }
@@ -841,7 +905,7 @@ static int test_unload_account_from_pool(test_suite_t* suite) {
              current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
     
     // Save account using its address as filename
-    if (ecall_save_account(account_id) != 0) {
+    if (save_account_to_pool(account_id, &current_account) != 0) {
         log_message(LOG_ERROR, "Failed to save test account\n");
         return -1;
     }
@@ -889,7 +953,7 @@ static int test_generate_account_in_pool(test_suite_t* suite) {
              current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
 
     // Save account using its address as filename
-    if (ecall_save_account(account_id) != 0) {
+    if (save_account_to_pool(account_id, &current_account) != 0) {
         print_test_result("Save account", 0, "Failed to save test account");
         return -1;
     }
@@ -945,7 +1009,7 @@ static int test_sign_with_pool_account(test_suite_t* suite) {
              current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
     
     // Save account using its address as filename
-    if (ecall_save_account(account_id) != 0) {
+    if (save_account_to_pool(account_id, &current_account) != 0) {
         print_test_result("Save test account", 0, "Failed to save test account");
         return -1;
     }
@@ -1059,7 +1123,7 @@ static int test_get_pool_status(test_suite_t* suite) {
              current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
 
     // Save account using its address as filename
-    if (ecall_save_account(account_id) != 0) {
+    if (save_account_to_pool(account_id, &current_account) != 0) {
         print_test_result("Save test account", 0, "Failed to save test account");
         return -1;
     }
@@ -1152,7 +1216,7 @@ static int test_use_count_persistence(test_suite_t* suite) {
     print_test_result("Verify use_count after first signing", 1, NULL);
     
     // Save account
-    if (ecall_save_account(account_id) != 0) {
+    if (save_account_to_pool(account_id, &current_account) != 0) {
         print_test_result("Save account", 0, "Failed to save account");
         return -1;
     }
@@ -1447,7 +1511,7 @@ int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message,
     log_message(LOG_DEBUG, "Use count incremented to %u\n", account_pool.accounts[pool_index].account.use_count);
 
     // Save account state to persist use_count
-    int save_result = ecall_save_account(account_id);
+    int save_result = save_account_to_pool(account_id, &account_pool.accounts[pool_index].account);
     if (save_result != 0) {
         log_message(LOG_ERROR, "Failed to save account state after signing\n");
         secp256k1_context_destroy(ctx);
@@ -1567,7 +1631,7 @@ int ecall_test_save_load(void) {
              current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
              current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
     
-    if (ecall_save_account(filename) != 0) {
+    if (save_account_to_pool(filename, &current_account) != 0) {
         log_message(LOG_ERROR, "Failed to save test account\n");
         return -1;
     }
@@ -1721,6 +1785,7 @@ int ecall_generate_account_to_pool(char* account_address) {
     log_message(LOG_INFO, "Account successfully generated in pool at index %d\n", free_slot);
     return free_slot;
 }
+
 
 #ifdef __cplusplus
 }

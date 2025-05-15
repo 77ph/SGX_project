@@ -21,7 +21,7 @@ enclave {
 
         // Account management functions
         // public int ecall_generate_account(void);  // Removed as it's now internal
-        public int ecall_save_account([in, string] const char* account_id);
+        // public int ecall_save_account([in, string] const char* account_id);  // Removed as deprecated
         public int ecall_load_account([in, string] const char* account_id);
         public int ecall_sign_message([in, size=message_len] const uint8_t* message, size_t message_len,
                                      [out, size=signature_len] uint8_t* signature, size_t signature_len);

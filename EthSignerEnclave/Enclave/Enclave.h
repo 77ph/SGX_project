@@ -85,7 +85,7 @@ int enclave_printf(const char *fmt, ...);
 
 // Функции для работы с аккаунтами
 // int ecall_generate_account(void);  // Removed as it's now internal
-int ecall_save_account(const char* account_id);
+// int ecall_save_account(const char* account_id);  // Removed as deprecated
 int ecall_load_account(const char* account_id);
 int ecall_sign_message(const uint8_t* message, size_t message_len, uint8_t* signature, size_t signature_len);
 
