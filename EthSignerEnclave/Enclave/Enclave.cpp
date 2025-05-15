@@ -44,15 +44,6 @@ int ecall_set_log_level(int level) {
     return 0;
 }
 
-// Test mode flag
-static bool is_test_mode = false;
-
-// Function to set test mode
-int ecall_set_test_mode(bool mode) {
-    is_test_mode = mode;
-    return 0;
-}
-
 // Test result structure
 typedef struct {
     const char* test_name;
