@@ -1244,7 +1244,7 @@ static int test_use_count_persistence(test_suite_t* suite) {
 // Test Keccak-256 address generation
 static int test_keccak_address_generation(test_suite_t* suite) {
     const char* test_name = "Keccak-256 Address Generation";
-    log_message(LOG_INFO, "Running test: %s\n", test_name);
+    LOG_INFO_MACRO("Running test: %s\n", test_name);
     
     // Predefined private key (32 bytes) - using the same key as in Python test
     const uint8_t test_private_key[32] = {
@@ -1263,7 +1263,7 @@ static int test_keccak_address_generation(test_suite_t* suite) {
         print_test_result(test_name, 0, "Failed to create secp256k1 context");
         return -1;
     }
-    
+
     // Create public key
     secp256k1_pubkey pubkey;
     if (!secp256k1_ec_pubkey_create(ctx, &pubkey, test_private_key)) {
@@ -1271,7 +1271,7 @@ static int test_keccak_address_generation(test_suite_t* suite) {
         print_test_result(test_name, 0, "Failed to create public key");
         return -1;
     }
-    
+
     // Serialize public key
     uint8_t serialized_pubkey[65];
     size_t serialized_pubkey_len = sizeof(serialized_pubkey);
@@ -1282,35 +1282,35 @@ static int test_keccak_address_generation(test_suite_t* suite) {
     }
 
     // Debug output for public key
-    log_message(LOG_DEBUG, "Full public key (65 bytes):\n");
+    LOG_DEBUG_MACRO("Full public key (65 bytes):\n");
     for (int i = 0; i < 65; i++) {
-        log_message(LOG_DEBUG, "%02x ", serialized_pubkey[i]);
+        LOG_DEBUG_MACRO("%02x ", serialized_pubkey[i]);
     }
-    log_message(LOG_DEBUG, "\n");
+    LOG_DEBUG_MACRO("\n");
 
-    log_message(LOG_DEBUG, "Public key without prefix (64 bytes):\n");
+    LOG_DEBUG_MACRO("Public key without prefix (64 bytes):\n");
     for (int i = 1; i < 65; i++) {
-        log_message(LOG_DEBUG, "%02x ", serialized_pubkey[i]);
+        LOG_DEBUG_MACRO("%02x ", serialized_pubkey[i]);
     }
-    log_message(LOG_DEBUG, "\n");
+    LOG_DEBUG_MACRO("\n");
     
     // Calculate Ethereum address
     uint8_t hash[32];
     keccak_256(serialized_pubkey + 1, 64, hash);
 
     // Debug output for hash
-    log_message(LOG_DEBUG, "Keccak-256 hash (32 bytes):\n");
+    LOG_DEBUG_MACRO("Keccak-256 hash (32 bytes):\n");
     for (int i = 0; i < 32; i++) {
-        log_message(LOG_DEBUG, "%02x ", hash[i]);
+        LOG_DEBUG_MACRO("%02x ", hash[i]);
     }
-    log_message(LOG_DEBUG, "\n");
+    LOG_DEBUG_MACRO("\n");
 
     // Debug output for address bytes (last 20 bytes of hash)
-    log_message(LOG_DEBUG, "Address bytes (last 20 bytes of hash):\n");
+    LOG_DEBUG_MACRO("Address bytes (last 20 bytes of hash):\n");
     for (int i = 12; i < 32; i++) {
-        log_message(LOG_DEBUG, "%02x ", hash[i]);
+        LOG_DEBUG_MACRO("%02x ", hash[i]);
     }
-    log_message(LOG_DEBUG, "\n");
+    LOG_DEBUG_MACRO("\n");
     
     // Convert to Ethereum address format
     char generated_address[43];
