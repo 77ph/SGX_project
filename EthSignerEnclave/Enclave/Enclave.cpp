@@ -297,7 +297,7 @@ static int generate_account(Account* account) {
         log_message(LOG_ERROR, "Invalid account parameter\n");
         return -1;
     }
-    
+
     uint8_t private_key[32] = {0};
     sgx_status_t status = generate_secure_private_key(private_key, sizeof(private_key));
     
@@ -305,7 +305,6 @@ static int generate_account(Account* account) {
         log_message(LOG_ERROR, "Failed to generate private key\n");
         return -1;
     }
-    log_message(LOG_DEBUG, "Private key generated successfully\n");
 
     // Generate public key from private key
     secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
@@ -328,7 +327,7 @@ static int generate_account(Account* account) {
     size_t serialized_pubkey_len = sizeof(serialized_pubkey);
     if (!secp256k1_ec_pubkey_serialize(ctx, serialized_pubkey, &serialized_pubkey_len, &pubkey, SECP256K1_EC_UNCOMPRESSED)) {
         log_message(LOG_ERROR, "Failed to serialize public key\n");
-        secp256k1_context_destroy(ctx);
+    secp256k1_context_destroy(ctx);
         return -1;
     }
     log_message(LOG_DEBUG, "Public key serialized\n");
