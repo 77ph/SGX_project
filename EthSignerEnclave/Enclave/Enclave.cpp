@@ -73,21 +73,6 @@ extern "C" {
     }
 }
 
-/* 
- * enclave_printf: 
- *   Invokes OCALL to display the enclave buffer to the terminal.
- */
-int enclave_printf(const char* fmt, ...)
-{
-    char buf[ENCLAVE_BUFSIZ] = { '\0' };
-    va_list ap;
-    va_start(ap, fmt);
-    vsnprintf(buf, ENCLAVE_BUFSIZ, fmt, ap);
-    va_end(ap);
-    ocall_print(buf);
-    return 0;
-}
-
 #ifdef __cplusplus
 extern "C" {
 #endif

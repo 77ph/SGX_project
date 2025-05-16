@@ -80,9 +80,6 @@ typedef struct {
 // Enclave initialization
 sgx_status_t sgx_ecall_initialize();
 
-// Наша собственная функция для вывода в энклаве
-int enclave_printf(const char *fmt, ...);
-
 // Функции для работы с аккаунтами
 // int ecall_generate_account(void);  // Removed as it's now internal
 // int ecall_save_account(const char* account_id);  // Removed as deprecated
@@ -113,6 +110,9 @@ sgx_status_t generate_secure_private_key(uint8_t* private_key, size_t size);
 bool add_account_to_pool(const char* account_id, const Account& account);
 Account* get_current_account(void);
 void keccak_256(const uint8_t* input, size_t input_len, uint8_t* output);
+
+int ecall_test_function(void);
+int ecall_generate_private_key(uint8_t* private_key, size_t private_key_size);
 
 #if defined(__cplusplus)
 }
