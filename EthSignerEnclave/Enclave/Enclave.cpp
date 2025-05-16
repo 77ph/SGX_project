@@ -761,11 +761,11 @@ static void print_test_result(const char* test_name, int passed, const char* err
 
 // Helper function to print test suite summary
 static void print_test_suite_summary(const test_suite_t* suite) {
-    log_message(LOG_DEBUG, "\n=== Test Suite: %s ===\n", suite->suite_name);
-    log_message(LOG_DEBUG, "Total tests: %d\n", suite->result_count);
-    log_message(LOG_DEBUG, "Passed: %d\n", suite->passed_count);
-    log_message(LOG_DEBUG, "Failed: %d\n", suite->result_count - suite->passed_count);
-    log_message(LOG_DEBUG, "=====================\n\n");
+    LOG_DEBUG_MACRO("\n=== Test Suite: %s ===\n", suite->suite_name);
+    LOG_DEBUG_MACRO("Total tests: %d\n", suite->result_count);
+    LOG_DEBUG_MACRO("Passed: %d\n", suite->passed_count);
+    LOG_DEBUG_MACRO("Failed: %d\n", suite->result_count - suite->passed_count);
+    LOG_DEBUG_MACRO("=====================\n\n");
 }
 
 // Test function for find_account_in_pool
