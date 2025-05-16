@@ -24,6 +24,21 @@
 // Default log level
 static int g_log_level = LOG_DEBUG;
 
+// Temporary debug flag
+#define SGX_DEBUG 1
+
+#if defined(SGX_DEBUG) && SGX_DEBUG == 1
+    #define LOG_DEBUG_MACRO(...) log_message(LOG_DEBUG, __VA_ARGS__)
+    #define LOG_INFO_MACRO(...)  log_message(LOG_INFO,  __VA_ARGS__)
+    #define LOG_WARN_MACRO(...)  log_message(LOG_WARNING,  __VA_ARGS__)
+    #define LOG_ERROR_MACRO(...) log_message(LOG_ERROR, __VA_ARGS__)
+#else
+    #define LOG_DEBUG_MACRO(...) do {} while(0)
+    #define LOG_INFO_MACRO(...)  do {} while(0)
+    #define LOG_WARN_MACRO(...)  do {} while(0)
+    #define LOG_ERROR_MACRO(...) log_message(LOG_ERROR, __VA_ARGS__) // Ошибки можно оставить
+#endif
+
 // Logging function
 static void log_message(int level, const char* format, ...) {
     if (level > g_log_level) return;
