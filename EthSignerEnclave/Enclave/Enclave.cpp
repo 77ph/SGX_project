@@ -100,7 +100,7 @@ static AccountPool account_pool = {0};
 
 // Initialize account pool
 static bool initialize_account_pool() {
-    log_message(LOG_INFO, "Initializing account pool...\n");
+    LOG_INFO_MACRO("Initializing account pool...\n");
     
     // Initialize all slots as free
     for (int i = 0; i < MAX_POOL_SIZE; i++) {
@@ -108,7 +108,7 @@ static bool initialize_account_pool() {
         secure_memzero(&account_pool.accounts[i].account, sizeof(Account));
     }
     
-    log_message(LOG_DEBUG, "Account pool initialized with %d slots\n", MAX_POOL_SIZE);
+    LOG_DEBUG_MACRO("Account pool initialized with %d slots\n", MAX_POOL_SIZE);
     return true;
 }
 
