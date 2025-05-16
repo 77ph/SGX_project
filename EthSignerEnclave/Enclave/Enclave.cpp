@@ -1425,22 +1425,22 @@ int ecall_test_function() {
 }
 
 int ecall_load_account_to_pool(const char* account_id) {
-    log_message(LOG_DEBUG, "[TEST] Loading account %s to pool...\n", account_id);
+    LOG_DEBUG_MACRO("[TEST] Loading account %s to pool...\n", account_id);
     
     if (!account_id) {
-        log_message(LOG_DEBUG, "[TEST] Expected behavior: Invalid account ID (test case)\n");
+        LOG_DEBUG_MACRO("[TEST] Expected behavior: Invalid account ID (test case)\n");
         return -1;
     }
 
     // Check if account is already in pool
     if (find_account_in_pool((const uint8_t*)account_id) != -1) {
-        log_message(LOG_DEBUG, "[TEST] Expected behavior: Account already in pool (test case)\n");
+        LOG_DEBUG_MACRO("[TEST] Expected behavior: Account already in pool (test case)\n");
         return -1;
     }
 
     // Load account
     if (ecall_load_account(account_id) != 0) {
-        log_message(LOG_DEBUG, "[TEST] Expected behavior: Failed to load account (test case)\n");
+        LOG_DEBUG_MACRO("[TEST] Expected behavior: Failed to load account (test case)\n");
         return -1;
     }
 
@@ -1454,7 +1454,7 @@ int ecall_load_account_to_pool(const char* account_id) {
     }
 
     if (free_slot == -1) {
-        log_message(LOG_DEBUG, "[TEST] Expected behavior: No free slots in pool (test case)\n");
+        LOG_DEBUG_MACRO("[TEST] Expected behavior: No free slots in pool (test case)\n");
         return -1;
     }
 
@@ -1464,13 +1464,13 @@ int ecall_load_account_to_pool(const char* account_id) {
 
     // Verify account was added correctly
     if (find_account_in_pool(current_account.address) != free_slot) {
-        log_message(LOG_DEBUG, "[TEST] Expected behavior: Failed to verify account in pool (test case)\n");
+        LOG_DEBUG_MACRO("[TEST] Expected behavior: Failed to verify account in pool (test case)\n");
         secure_memzero(&account_pool.accounts[free_slot].account, sizeof(Account));
         account_pool.accounts[free_slot].account.use_count = 0;
         return -1;
     }
 
-    log_message(LOG_DEBUG, "[TEST] Account successfully loaded to pool at index %d\n", free_slot);
+    LOG_DEBUG_MACRO("[TEST] Account successfully loaded to pool at index %d\n", free_slot);
     return free_slot;
 }
 
