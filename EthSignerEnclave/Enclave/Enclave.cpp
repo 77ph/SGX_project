@@ -440,62 +440,62 @@ static int save_account_to_pool(const char* account_id, const Account* account) 
 
 // Enhanced transaction signing with security checks
 int ecall_sign_transaction(const uint8_t* tx_hash, size_t tx_hash_size,
-                          uint8_t* signature, size_t signature_size) {
-    log_message(LOG_INFO, "Starting transaction signing...\n");
+                         uint8_t* signature, size_t signature_size) {
+    LOG_INFO_MACRO("Starting transaction signing...\n");
     
     if (!tx_hash || !signature || tx_hash_size != 32 || signature_size != 64) {
-        log_message(LOG_ERROR, "Invalid parameters: tx_hash=%p, signature=%p, tx_hash_size=%zu, signature_size=%zu\n",
+        LOG_ERROR_MACRO("Invalid parameters: tx_hash=%p, signature=%p, tx_hash_size=%zu, signature_size=%zu\n",
                tx_hash, signature, tx_hash_size, signature_size);
         return -1;
     }
-    
+
     // Verify private key strength
     if (!is_strong_private_key(current_account.private_key, sizeof(current_account.private_key))) {
-        log_message(LOG_ERROR, "Private key does not meet strength requirements\n");
+        LOG_ERROR_MACRO("Private key does not meet strength requirements\n");
         return -1;
     }
-    log_message(LOG_INFO, "Private key verified\n");
+    LOG_INFO_MACRO("Private key verified\n");
     
     // Create signing context
     secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
     if (!ctx) {
-        log_message(LOG_ERROR, "Failed to create secp256k1 context\n");
+        LOG_ERROR_MACRO("Failed to create secp256k1 context\n");
         return -1;
     }
-    log_message(LOG_INFO, "Secp256k1 context created\n");
-    
+    LOG_INFO_MACRO("Secp256k1 context created\n");
+
     // Sign the transaction
     secp256k1_ecdsa_signature sig;
     if (!secp256k1_ecdsa_sign(ctx, &sig, tx_hash, current_account.private_key, NULL, NULL)) {
-        log_message(LOG_ERROR, "Failed to create signature\n");
+        LOG_ERROR_MACRO("Failed to create signature\n");
         secp256k1_context_destroy(ctx);
         return -1;
     }
-    log_message(LOG_INFO, "Signature created\n");
-    
+    LOG_DEBUG_MACRO("Signature created\n");
+
     // Serialize signature
     if (!secp256k1_ecdsa_signature_serialize_compact(ctx, signature, &sig)) {
-        log_message(LOG_ERROR, "Failed to serialize signature\n");
+        LOG_ERROR_MACRO("Failed to serialize signature\n");
         secp256k1_context_destroy(ctx);
         return -1;
     }
-    log_message(LOG_INFO, "Signature serialized\n");
+    LOG_DEBUG_MACRO("Signature serialized\n");
 
     // Increment use count
     current_account.use_count++;
-    log_message(LOG_INFO, "Use count incremented to %u\n", current_account.use_count);
+    LOG_DEBUG_MACRO("Use count incremented to %u\n", current_account.use_count);
 
     // Save account state to persist use_count
     int save_result = save_account_to_pool("default", &current_account);
     if (save_result != 0) {
-        log_message(LOG_ERROR, "Failed to save account state after signing\n");
+        LOG_ERROR_MACRO("Failed to save account state after signing\n");
         secp256k1_context_destroy(ctx);
         return -1;
     }
-    log_message(LOG_INFO, "Account state saved after signing\n");
+    LOG_DEBUG_MACRO("Account state saved after signing\n");
     
     secp256k1_context_destroy(ctx);
-    log_message(LOG_INFO, "Transaction signing completed successfully\n");
+    LOG_INFO_MACRO("Transaction signing completed successfully\n");
     return 0;
 }
 
