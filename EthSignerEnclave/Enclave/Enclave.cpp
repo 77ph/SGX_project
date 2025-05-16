@@ -1605,10 +1605,10 @@ static char* my_strcat(char* dest, const char* src) {
 }
 
 int ecall_get_pool_status(uint32_t* total_accounts, uint32_t* active_accounts, char* account_addresses) {
-    log_message(LOG_INFO, "Getting pool status...\n");
+    LOG_INFO_MACRO("Getting pool status...\n");
     
     if (!total_accounts || !active_accounts || !account_addresses) {
-        log_message(LOG_ERROR, "Invalid parameters: total_accounts=%p, active_accounts=%p, account_addresses=%p\n", 
+        LOG_ERROR_MACRO("Invalid parameters: total_accounts=%p, active_accounts=%p, account_addresses=%p\n", 
                total_accounts, active_accounts, account_addresses);
         return -1;
     }
@@ -1648,12 +1648,12 @@ int ecall_get_pool_status(uint32_t* total_accounts, uint32_t* active_accounts, c
             }
             my_strcat(account_addresses, address);
             
-            log_message(LOG_DEBUG, "Found account at index %d: %s (use_count: %u)\n", 
+            LOG_DEBUG_MACRO("Found account at index %d: %s (use_count: %u)\n", 
                    i, address, account_pool.accounts[i].account.use_count);
         }
     }
     
-    log_message(LOG_INFO, "Pool status: total accounts=%u, active accounts=%u\n", *total_accounts, *active_accounts);
+    LOG_INFO_MACRO("Pool status: total accounts=%u, active accounts=%u\n", *total_accounts, *active_accounts);
     return 0;
 }
 
