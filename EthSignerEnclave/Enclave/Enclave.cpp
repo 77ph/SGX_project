@@ -156,18 +156,18 @@ double calculate_entropy(const uint8_t* data, size_t size) {
         }
     }
     
-    log_message(LOG_DEBUG, "Entropy calculation details:\n");
-    log_message(LOG_DEBUG, "  Data size: %zu bytes\n", size);
-    log_message(LOG_DEBUG, "  Unique bytes: ");
+    LOG_DEBUG_MACRO("Entropy calculation details:\n");
+    LOG_DEBUG_MACRO("  Data size: %zu bytes\n", size);
+    LOG_DEBUG_MACRO("  Unique bytes: ");
     int unique_bytes = 0;
     for (int i = 0; i < 256; i++) {
         if (counts[i] > 0) {
             unique_bytes++;
-            log_message(LOG_DEBUG, "%02x ", i);
+            LOG_DEBUG_MACRO("%02x ", i);
         }
     }
-    log_message(LOG_DEBUG, "\n  Unique bytes count: %d\n", unique_bytes);
-    log_message(LOG_DEBUG, "  Raw entropy: %.2f bits\n", entropy);
+    LOG_DEBUG_MACRO("\n  Unique bytes count: %d\n", unique_bytes);
+    LOG_DEBUG_MACRO("  Raw entropy: %.2f bits\n", entropy);
     
     return entropy;
 }
