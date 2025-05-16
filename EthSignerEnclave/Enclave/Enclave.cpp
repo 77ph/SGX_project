@@ -114,15 +114,15 @@ static bool initialize_account_pool() {
 
 // Enclave initialization function
 sgx_status_t sgx_ecall_initialize() {
-    log_message(LOG_INFO, "Initializing enclave...\n");
+    LOG_INFO_MACRO("Initializing enclave...\n");
     
     // Initialize account pool
     if (!initialize_account_pool()) {
-        log_message(LOG_ERROR, "Failed to initialize account pool\n");
+        LOG_ERROR_MACRO("Failed to initialize account pool\n");
         return SGX_ERROR_UNEXPECTED;
     }
     
-    log_message(LOG_INFO, "Enclave initialized successfully\n");
+    LOG_INFO_MACRO("Enclave initialized successfully\n");
     return SGX_SUCCESS;
 }
 
