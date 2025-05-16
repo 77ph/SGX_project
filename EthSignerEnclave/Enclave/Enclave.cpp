@@ -1072,14 +1072,14 @@ static int test_sign_with_pool_account(test_suite_t* suite) {
 }
 
 static int test_get_pool_status(test_suite_t* suite) {
-    log_message(LOG_INFO, "\nTesting get_pool_status...\n");
+    LOG_INFO_MACRO("\nTesting get_pool_status...\n");
     
     // Clear pool before testing
     for (int i = 0; i < MAX_POOL_SIZE; i++) {
         secure_memzero(&account_pool.accounts[i].account, sizeof(Account));
         account_pool.accounts[i].account.is_initialized = false;
     }
-    log_message(LOG_INFO, "Pool cleared\n");
+    LOG_INFO_MACRO("Pool cleared\n");
     
     // Test 1: Check empty pool
     uint32_t total_accounts = 0;
