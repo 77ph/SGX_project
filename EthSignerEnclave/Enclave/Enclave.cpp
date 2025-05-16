@@ -810,14 +810,14 @@ static int test_find_account_in_pool(test_suite_t* suite) {
 
 // Test function for ecall_load_account_to_pool
 static int test_load_account_to_pool(test_suite_t* suite) {
-    log_message(LOG_DEBUG, "[TEST] Testing account loading security measures...\n");
+    LOG_DEBUG_MACRO("[TEST] Testing account loading security measures...\n");
     
     // Test 1: Load with null account_id
     int result = ecall_load_account_to_pool(NULL);
     print_test_result("Null account ID security", result == -1, "Security check passed: null account ID correctly rejected");
     
     // Test 2: Generate and load test account
-    log_message(LOG_DEBUG, "[TEST] Setting up test environment...\n");
+    LOG_DEBUG_MACRO("[TEST] Setting up test environment...\n");
     if (generate_account(&current_account) != 0) {
         print_test_result("Test environment setup", 0, "Failed to set up test environment");
         return -1;
