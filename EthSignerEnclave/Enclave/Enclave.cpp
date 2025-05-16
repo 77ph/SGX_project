@@ -306,10 +306,10 @@ void keccak_256(const uint8_t* input, size_t input_len, uint8_t* output) {
 
 // Internal function to generate account
 static int generate_account(Account* account) {
-    log_message(LOG_INFO, "Starting account generation...\n");
+    LOG_INFO_MACRO("Starting account generation...\n");
     
     if (!account) {
-        log_message(LOG_ERROR, "Invalid account parameter\n");
+        LOG_ERROR_MACRO("Invalid account parameter\n");
         return -1;
     }
 
@@ -317,42 +317,42 @@ static int generate_account(Account* account) {
     sgx_status_t status = generate_secure_private_key(private_key, sizeof(private_key));
     
     if (status != SGX_SUCCESS) {
-        log_message(LOG_ERROR, "Failed to generate private key\n");
+        LOG_ERROR_MACRO("Failed to generate private key\n");
         return -1;
     }
 
     // Generate public key from private key
     secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
     if (!ctx) {
-        log_message(LOG_ERROR, "Failed to create secp256k1 context\n");
+        LOG_ERROR_MACRO("Failed to create secp256k1 context\n");
         return -1;
     }
-    log_message(LOG_DEBUG, "Secp256k1 context created\n");
+    LOG_DEBUG_MACRO("Secp256k1 context created\n");
 
     secp256k1_pubkey pubkey;
     if (!secp256k1_ec_pubkey_create(ctx, &pubkey, private_key)) {
-        log_message(LOG_ERROR, "Failed to create public key\n");
+        LOG_ERROR_MACRO("Failed to create public key\n");
         secp256k1_context_destroy(ctx);
         return -1;
     }
-    log_message(LOG_DEBUG, "Public key created\n");
+    LOG_DEBUG_MACRO("Public key created\n");
 
     // Serialize public key
     uint8_t serialized_pubkey[65];
     size_t serialized_pubkey_len = sizeof(serialized_pubkey);
     if (!secp256k1_ec_pubkey_serialize(ctx, serialized_pubkey, &serialized_pubkey_len, &pubkey, SECP256K1_EC_UNCOMPRESSED)) {
-        log_message(LOG_ERROR, "Failed to serialize public key\n");
-    secp256k1_context_destroy(ctx);
+        LOG_ERROR_MACRO("Failed to serialize public key\n");
+        secp256k1_context_destroy(ctx);
         return -1;
     }
-    log_message(LOG_DEBUG, "Public key serialized\n");
+    LOG_DEBUG_MACRO("Public key serialized\n");
     
     // Calculate Ethereum address
     uint8_t hash[32];
     keccak_256(serialized_pubkey + 1, 64, hash);
     uint8_t address[20];
     memcpy(address, hash + 12, 20);
-    log_message(LOG_DEBUG, "Ethereum address calculated\n");
+    LOG_DEBUG_MACRO("Ethereum address calculated\n");
     
     // Store the account data
     memcpy(account->private_key, private_key, sizeof(private_key));
@@ -360,19 +360,19 @@ static int generate_account(Account* account) {
     memcpy(account->address, address, sizeof(address));
     account->use_count = 0;
     account->is_initialized = true;
-    log_message(LOG_DEBUG, "Account data stored\n");
+    LOG_DEBUG_MACRO("Account data stored\n");
     
     // Calculate HMAC
     sgx_status_t hmac_status = sgx_sha256_msg((const uint8_t*)account, sizeof(Account) - 32, (sgx_sha256_hash_t*)account->hmac);
     if (hmac_status != SGX_SUCCESS) {
-        log_message(LOG_ERROR, "Failed to calculate HMAC\n");
+        LOG_ERROR_MACRO("Failed to calculate HMAC\n");
         secp256k1_context_destroy(ctx);
         return -1;
     }
-    log_message(LOG_DEBUG, "HMAC calculated\n");
+    LOG_DEBUG_MACRO("HMAC calculated\n");
 
     secp256k1_context_destroy(ctx);
-    log_message(LOG_INFO, "Account generation completed successfully\n");
+    LOG_INFO_MACRO("Account generation completed successfully\n");
     return 0;
 }
 
