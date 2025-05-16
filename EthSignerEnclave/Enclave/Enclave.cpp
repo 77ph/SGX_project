@@ -1518,17 +1518,17 @@ int ecall_unload_account_from_pool(const char* account_id) {
 }
 
 int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message, size_t message_len, uint8_t* signature, size_t signature_len) {
-    log_message(LOG_DEBUG, "[TEST] Signing message with pool account %s...\n", account_id);
+    LOG_DEBUG_MACRO("[TEST] Signing message with pool account %s...\n", account_id);
     
     if (!account_id || !message || !signature || message_len == 0 || signature_len < 64) {
-        log_message(LOG_DEBUG, "[TEST] Expected behavior: Invalid parameters (test case)\n");
+        LOG_DEBUG_MACRO("[TEST] Expected behavior: Invalid parameters (test case)\n");
         return -1;
     }
 
     // Convert hex string to bytes
     uint8_t address[20];
     if (strlen(account_id) != 42 || account_id[0] != '0' || account_id[1] != 'x') {
-        log_message(LOG_DEBUG, "[TEST] Expected behavior: Invalid account ID format (test case)\n");
+        LOG_DEBUG_MACRO("[TEST] Expected behavior: Invalid account ID format (test case)\n");
         return -1;
     }
     
@@ -1540,51 +1540,51 @@ int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message,
     // Find account in pool
     int pool_index = find_account_in_pool(address);
     if (pool_index == -1) {
-        log_message(LOG_DEBUG, "[TEST] Expected behavior: Account not found in pool (test case)\n");
+        LOG_DEBUG_MACRO("[TEST] Expected behavior: Account not found in pool (test case)\n");
         return -1;
     }
-    log_message(LOG_DEBUG, "[TEST] Found account at pool index %d\n", pool_index);
+    LOG_DEBUG_MACRO("[TEST] Found account at pool index %d\n", pool_index);
 
     // Create secp256k1 context
     secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
     if (!ctx) {
-        log_message(LOG_ERROR, "Failed to create secp256k1 context\n");
+        LOG_ERROR_MACRO("Failed to create secp256k1 context\n");
         return -1;
     }
-    log_message(LOG_DEBUG, "Secp256k1 context created\n");
+    LOG_DEBUG_MACRO("Secp256k1 context created\n");
 
     // Create signature
     secp256k1_ecdsa_signature sig;
     if (!secp256k1_ecdsa_sign(ctx, &sig, message, account_pool.accounts[pool_index].account.private_key, NULL, NULL)) {
-        log_message(LOG_ERROR, "Failed to create signature\n");
+        LOG_ERROR_MACRO("Failed to create signature\n");
         secp256k1_context_destroy(ctx);
         return -1;
     }
-    log_message(LOG_DEBUG, "Signature created\n");
+    LOG_DEBUG_MACRO("Signature created\n");
 
     // Serialize signature
     if (!secp256k1_ecdsa_signature_serialize_compact(ctx, signature, &sig)) {
-        log_message(LOG_ERROR, "Failed to serialize signature\n");
+        LOG_ERROR_MACRO("Failed to serialize signature\n");
         secp256k1_context_destroy(ctx);
         return -1;
     }
-    log_message(LOG_DEBUG, "Signature serialized\n");
+    LOG_DEBUG_MACRO("Signature serialized\n");
 
     // Increment use count in Account
     account_pool.accounts[pool_index].account.use_count++;
-    log_message(LOG_DEBUG, "Use count incremented to %u\n", account_pool.accounts[pool_index].account.use_count);
+    LOG_DEBUG_MACRO("Use count incremented to %u\n", account_pool.accounts[pool_index].account.use_count);
 
     // Save account state to persist use_count
     int save_result = save_account_to_pool(account_id, &account_pool.accounts[pool_index].account);
     if (save_result != 0) {
-        log_message(LOG_ERROR, "Failed to save account state after signing\n");
+        LOG_ERROR_MACRO("Failed to save account state after signing\n");
         secp256k1_context_destroy(ctx);
         return -1;
     }
-    log_message(LOG_DEBUG, "Account state saved after signing\n");
+    LOG_DEBUG_MACRO("Account state saved after signing\n");
 
     secp256k1_context_destroy(ctx);
-    log_message(LOG_INFO, "Message signing completed successfully\n");
+    LOG_INFO_MACRO("Message signing completed successfully\n");
     return 0;
 }
 
