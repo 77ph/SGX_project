@@ -753,9 +753,9 @@ static int find_account_in_pool(const uint8_t* address) {
 // Helper function to print test result
 static void print_test_result(const char* test_name, int passed, const char* error_message) {
     if (passed) {
-        log_message(LOG_DEBUG, "✓ %s: PASSED\n", test_name);
+        LOG_DEBUG_MACRO("✓ %s: PASSED\n", test_name);
     } else {
-        log_message(LOG_DEBUG, "✗ %s: FAILED - %s\n", test_name, error_message);
+        LOG_DEBUG_MACRO("✗ %s: FAILED - %s\n", test_name, error_message);
     }
 }
 
