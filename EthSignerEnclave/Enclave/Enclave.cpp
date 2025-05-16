@@ -232,10 +232,10 @@ sgx_status_t generate_entropy(uint8_t* entropy, size_t size) {
 
 // Enhanced key generation with security checks
 sgx_status_t generate_secure_private_key(uint8_t* private_key, size_t size) {
-    log_message(LOG_INFO, "Starting secure private key generation...\n");
+    LOG_INFO_MACRO("Starting secure private key generation...\n");
     
     if (!private_key || size != 32) {
-        log_message(LOG_ERROR, "Invalid parameters: private_key=%p, size=%zu\n", private_key, size);
+        LOG_ERROR_MACRO("Invalid parameters: private_key=%p, size=%zu\n", private_key, size);
         return SGX_ERROR_INVALID_PARAMETER;
     }
     
@@ -243,19 +243,19 @@ sgx_status_t generate_secure_private_key(uint8_t* private_key, size_t size) {
     uint8_t entropy[64];
     sgx_status_t status = generate_entropy(entropy, sizeof(entropy));
     if (status != SGX_SUCCESS) {
-        log_message(LOG_ERROR, "Failed to generate entropy: %d\n", status);
+        LOG_ERROR_MACRO("Failed to generate entropy: %d\n", status);
         return status;
     }
-    log_message(LOG_DEBUG, "Generated entropy of size %zu bytes\n", sizeof(entropy));
+    LOG_DEBUG_MACRO("Generated entropy of size %zu bytes\n", sizeof(entropy));
     
     // Step 2: Extract PRK using SHA-256 (HKDF-Extract)
     sgx_sha256_hash_t prk;
     status = sgx_sha256_msg(entropy, sizeof(entropy), &prk);
     if (status != SGX_SUCCESS) {
-        log_message(LOG_ERROR, "Failed to extract PRK: %d\n", status);
+        LOG_ERROR_MACRO("Failed to extract PRK: %d\n", status);
         return status;
     }
-    log_message(LOG_DEBUG, "PRK extracted, size: %zu bytes\n", sizeof(prk));
+    LOG_DEBUG_MACRO("PRK extracted, size: %zu bytes\n", sizeof(prk));
     
     // Step 3: Expand PRK with info string (HKDF-Expand)
     const char* info = "keygen";
@@ -271,21 +271,21 @@ sgx_status_t generate_secure_private_key(uint8_t* private_key, size_t size) {
     sgx_sha256_hash_t final_hash;
     status = sgx_sha256_msg(expand_input, 32 + info_len + 1, &final_hash);
     if (status != SGX_SUCCESS) {
-        log_message(LOG_ERROR, "Failed to expand key: %d\n", status);
+        LOG_ERROR_MACRO("Failed to expand key: %d\n", status);
         return status;
     }
-    log_message(LOG_DEBUG, "Key expanded, final size: %zu bytes\n", sizeof(final_hash));
+    LOG_DEBUG_MACRO("Key expanded, final size: %zu bytes\n", sizeof(final_hash));
     
     // Copy the final hash to the private key
     memcpy(private_key, final_hash, 32);
     
     // Verify key strength
     if (is_strong_private_key(private_key, size)) {
-        log_message(LOG_INFO, "Private key generated successfully\n");
+        LOG_INFO_MACRO("Private key generated successfully\n");
         return SGX_SUCCESS;
     }
     
-    log_message(LOG_ERROR, "Generated key did not meet strength requirements\n");
+    LOG_ERROR_MACRO("Generated key did not meet strength requirements\n");
     return SGX_ERROR_UNEXPECTED;
 }
 
