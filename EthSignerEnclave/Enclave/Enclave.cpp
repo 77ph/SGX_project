@@ -36,7 +36,7 @@ static int g_log_level = LOG_DEBUG;
     #define LOG_DEBUG_MACRO(...) do {} while(0)
     #define LOG_INFO_MACRO(...)  do {} while(0)
     #define LOG_WARN_MACRO(...)  do {} while(0)
-    #define LOG_ERROR_MACRO(...) log_message(LOG_ERROR, __VA_ARGS__) // Ошибки можно оставить
+    #define LOG_ERROR_MACRO(...) log_message(LOG_ERROR, __VA_ARGS__)
 #endif
 
 // Logging function
