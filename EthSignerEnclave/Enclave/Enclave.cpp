@@ -1262,7 +1262,7 @@ static int test_keccak_address_generation(test_suite_t* suite) {
     secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
     if (!ctx) {
         print_test_result(test_name, 0, "Failed to create secp256k1 context");
-        return 0;
+        return -1;
     }
     
     // Create public key
@@ -1270,7 +1270,7 @@ static int test_keccak_address_generation(test_suite_t* suite) {
     if (!secp256k1_ec_pubkey_create(ctx, &pubkey, test_private_key)) {
         secp256k1_context_destroy(ctx);
         print_test_result(test_name, 0, "Failed to create public key");
-        return 0;
+        return -1;
     }
     
     // Serialize public key
@@ -1279,7 +1279,7 @@ static int test_keccak_address_generation(test_suite_t* suite) {
     if (!secp256k1_ec_pubkey_serialize(ctx, serialized_pubkey, &serialized_pubkey_len, &pubkey, SECP256K1_EC_UNCOMPRESSED)) {
         secp256k1_context_destroy(ctx);
         print_test_result(test_name, 0, "Failed to serialize public key");
-        return 0;
+        return -1;
     }
 
     // Debug output for public key
@@ -1328,12 +1328,12 @@ static int test_keccak_address_generation(test_suite_t* suite) {
                 expected_address, generated_address);
         secp256k1_context_destroy(ctx);
         print_test_result(test_name, 0, error_msg);
-        return 0;
+        return -1;
     }
     
     secp256k1_context_destroy(ctx);
     print_test_result(test_name, 1, NULL);
-    return 1;
+    return 0;
 }
 
 int ecall_test_function() {
@@ -1351,54 +1351,70 @@ int ecall_test_function() {
     }
     
     // Run tests
+    int test_result = test_find_account_in_pool(&suite);
     suite.results[suite.result_count++] = (test_result_t){
         "Find Account in Pool",
-        test_find_account_in_pool(&suite),
+        test_result == 0,
         NULL
     };
+    if (test_result == 0) suite.passed_count++;
     
+    test_result = test_load_account_to_pool(&suite);
     suite.results[suite.result_count++] = (test_result_t){
         "Load Account to Pool",
-        test_load_account_to_pool(&suite),
+        test_result == 0,
         NULL
     };
+    if (test_result == 0) suite.passed_count++;
     
+    test_result = test_unload_account_from_pool(&suite);
     suite.results[suite.result_count++] = (test_result_t){
         "Unload Account from Pool",
-        test_unload_account_from_pool(&suite),
+        test_result == 0,
         NULL
     };
+    if (test_result == 0) suite.passed_count++;
     
+    test_result = test_generate_account_in_pool(&suite);
     suite.results[suite.result_count++] = (test_result_t){
         "Generate Account in Pool",
-        test_generate_account_in_pool(&suite),
+        test_result == 0,
         NULL
     };
+    if (test_result == 0) suite.passed_count++;
     
+    test_result = test_sign_with_pool_account(&suite);
     suite.results[suite.result_count++] = (test_result_t){
         "Sign with Pool Account",
-        test_sign_with_pool_account(&suite),
+        test_result == 0,
         NULL
     };
+    if (test_result == 0) suite.passed_count++;
     
+    test_result = test_get_pool_status(&suite);
     suite.results[suite.result_count++] = (test_result_t){
         "Get Pool Status",
-        test_get_pool_status(&suite),
+        test_result == 0,
         NULL
     };
+    if (test_result == 0) suite.passed_count++;
     
+    test_result = test_use_count_persistence(&suite);
     suite.results[suite.result_count++] = (test_result_t){
         "Use Count Persistence",
-        test_use_count_persistence(&suite),
+        test_result == 0,
         NULL
     };
+    if (test_result == 0) suite.passed_count++;
     
     // Add Keccak address generation test
+    test_result = test_keccak_address_generation(&suite);
     suite.results[suite.result_count++] = (test_result_t){
         "Keccak-256 Address Generation",
-        test_keccak_address_generation(&suite),
+        test_result == 0,
         NULL
     };
+    if (test_result == 0) suite.passed_count++;
     
     // Print test suite summary
     print_test_suite_summary(&suite);
