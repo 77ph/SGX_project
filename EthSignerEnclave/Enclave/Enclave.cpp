@@ -862,7 +862,7 @@ static int test_load_account_to_pool(test_suite_t* suite) {
 
 // Test function for ecall_unload_account_from_pool
 static int test_unload_account_from_pool(test_suite_t* suite) {
-    log_message(LOG_INFO, "\nTesting ecall_unload_account_from_pool...\n");
+    LOG_INFO_MACRO("\nTesting ecall_unload_account_from_pool...\n");
     
     // Test 1: Unload with null account_id
     int result = ecall_unload_account_from_pool(NULL);
@@ -870,15 +870,15 @@ static int test_unload_account_from_pool(test_suite_t* suite) {
     
     // Test 2: Unload non-existent account
     result = ecall_unload_account_from_pool("0x0000000000000000000000000000000000000000");
-    log_message(LOG_INFO, "Test 2 (unload non-existent): result = %d (expected -1)\n", result);
+    LOG_INFO_MACRO("Test 2 (unload non-existent): result = %d (expected -1)\n", result);
     
     // Test 3: Generate, load and unload test account
-    log_message(LOG_INFO, "\nTest 3: Generate, load and unload test account...\n");
+    LOG_INFO_MACRO("\nTest 3: Generate, load and unload test account...\n");
     if (generate_account(&current_account) != 0) {
-        log_message(LOG_ERROR, "Failed to generate test account\n");
+        LOG_ERROR_MACRO("Failed to generate test account\n");
         return -1;
     }
-    
+
     // Create account_id from address
     char account_id[43];
     snprintf(account_id, sizeof(account_id), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
@@ -890,30 +890,30 @@ static int test_unload_account_from_pool(test_suite_t* suite) {
     
     // Save account using its address as filename
     if (save_account_to_pool(account_id, &current_account) != 0) {
-        log_message(LOG_ERROR, "Failed to save test account\n");
+        LOG_ERROR_MACRO("Failed to save test account\n");
         return -1;
     }
-    
+
     // Load account to pool
     if (ecall_load_account_to_pool(account_id) < 0) {
-        log_message(LOG_ERROR, "Failed to load account to pool\n");
+        LOG_ERROR_MACRO("Failed to load account to pool\n");
         return -1;
     }
-    
+
     // Unload account
     result = ecall_unload_account_from_pool(account_id);
-    log_message(LOG_INFO, "Test 3 (unload account): result = %d (expected 0)\n", result);
+    LOG_INFO_MACRO("Test 3 (unload account): result = %d (expected 0)\n", result);
     if (result != 0) {
         return -1;
     }
-    
+
     // Verify account was unloaded
     if (find_account_in_pool((const uint8_t*)account_id) != -1) {
-        log_message(LOG_ERROR, "Account still found in pool after unload\n");
+        LOG_ERROR_MACRO("Account still found in pool after unload\n");
         return -1;
     }
     
-    log_message(LOG_INFO, "\nTest cleanup completed\n");
+    LOG_INFO_MACRO("\nTest cleanup completed\n");
     return 0;
 }
 
