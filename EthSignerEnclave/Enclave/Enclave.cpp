@@ -1658,20 +1658,20 @@ int ecall_get_pool_status(uint32_t* total_accounts, uint32_t* active_accounts, c
 }
 
 int ecall_generate_account_to_pool(char* account_address) {
-    log_message(LOG_INFO, "Generating new account in pool...\n");
+    LOG_INFO_MACRO("Generating new account in pool...\n");
     
     if (!account_address) {
-        log_message(LOG_ERROR, "Invalid account_address parameter\n");
+        LOG_ERROR_MACRO("Invalid account_address parameter\n");
         return -1;
     }
 
     // Generate new account
     Account new_account = {0};
     if (generate_account(&new_account) != 0) {
-        log_message(LOG_ERROR, "Failed to generate account\n");
+        LOG_ERROR_MACRO("Failed to generate account\n");
         return -1;
     }
-    log_message(LOG_INFO, "Account generated successfully\n");
+    LOG_INFO_MACRO("Account generated successfully\n");
 
     // Format address as hex string
     snprintf(account_address, 43, "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
@@ -1691,17 +1691,17 @@ int ecall_generate_account_to_pool(char* account_address) {
     }
 
     if (free_slot == -1) {
-        log_message(LOG_ERROR, "No free slots in pool\n");
+        LOG_ERROR_MACRO("No free slots in pool\n");
         return -1;
     }
-    log_message(LOG_INFO, "Found free slot at index %d\n", free_slot);
+    LOG_INFO_MACRO("Found free slot at index %d\n", free_slot);
 
     // Copy account to pool
     memcpy(&account_pool.accounts[free_slot].account, &new_account, sizeof(Account));
     account_pool.accounts[free_slot].account.use_count = 0;
-    log_message(LOG_INFO, "Account copied to pool at index %d\n", free_slot);
+    LOG_INFO_MACRO("Account copied to pool at index %d\n", free_slot);
 
-    log_message(LOG_INFO, "Account successfully generated in pool at index %d\n", free_slot);
+    LOG_INFO_MACRO("Account successfully generated in pool at index %d\n", free_slot);
     return free_slot;
 }
 
