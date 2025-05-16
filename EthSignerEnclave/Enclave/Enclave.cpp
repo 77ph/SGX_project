@@ -1154,7 +1154,7 @@ static int test_get_pool_status(test_suite_t* suite) {
 }
 
 static int test_use_count_persistence(test_suite_t* suite) {
-    log_message(LOG_INFO, "\nTesting use_count persistence...\n");
+    LOG_INFO_MACRO("\nTesting use_count persistence...\n");
     
     // Test 1: Generate account
     if (generate_account(&current_account) != 0) {
