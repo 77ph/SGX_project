@@ -734,19 +734,19 @@ int ecall_sign_message(const uint8_t* message, size_t message_len, uint8_t* sign
 // Helper function to find account in pool by address
 static int find_account_in_pool(const uint8_t* address) {
     if (!address) {
-        log_message(LOG_DEBUG, "[TEST] Expected behavior: Invalid address parameter (test case)\n");
+        LOG_DEBUG_MACRO("[TEST] Expected behavior: Invalid address parameter (test case)\n");
         return -1;
     }
 
     for (int i = 0; i < MAX_POOL_SIZE; i++) {
         if (account_pool.accounts[i].account.is_initialized &&
             memcmp(account_pool.accounts[i].account.address, address, 20) == 0) {
-            log_message(LOG_DEBUG, "[TEST] Found account at pool index %d\n", i);
+            LOG_DEBUG_MACRO("[TEST] Found account at pool index %d\n", i);
             return i;
         }
     }
 
-    log_message(LOG_DEBUG, "[TEST] Account not found in pool (expected in test case)\n");
+    LOG_DEBUG_MACRO("[TEST] Account not found in pool (expected in test case)\n");
     return -1;
 }
 
