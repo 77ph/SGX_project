@@ -174,17 +174,13 @@ double calculate_entropy(const uint8_t* data, size_t size) {
 
 // Helper function to check if a private key is cryptographically strong
 bool is_strong_private_key(const uint8_t* private_key, size_t size) {
-    LOG_DEBUG_MACRO("Checking private key strength...\n");
-    
     if (!private_key || size != 32) {
-        LOG_ERROR_MACRO("Invalid key parameters: key=%p, size=%zu\n", private_key, size);
         return false;
     }
     
     // Create secp256k1 context for verification
     secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
     if (!ctx) {
-        LOG_ERROR_MACRO("Failed to create secp256k1 context\n");
         return false;
     }
     
@@ -192,27 +188,7 @@ bool is_strong_private_key(const uint8_t* private_key, size_t size) {
     bool is_valid = secp256k1_ec_seckey_verify(ctx, private_key);
     secp256k1_context_destroy(ctx);
     
-    if (!is_valid) {
-        LOG_ERROR_MACRO("Key failed secp256k1 validation\n");
-        return false;
-    }
-    LOG_DEBUG_MACRO("Key passed secp256k1 validation\n");
-    
-    // Check for weak patterns
-    bool has_weak_pattern = true;
-    for (size_t i = 1; i < size; i++) {
-        if (private_key[i] != private_key[0]) {
-            has_weak_pattern = false;
-            break;
-        }
-    }
-    if (has_weak_pattern) {
-        LOG_ERROR_MACRO("Key has weak pattern (all bytes are the same)\n");
-        return false;
-    }
-    
-    LOG_DEBUG_MACRO("Key passed all strength checks\n");
-    return true;
+    return is_valid;
 }
 
 // Enhanced entropy generation using double SHA-256
