@@ -918,7 +918,7 @@ static int test_unload_account_from_pool(test_suite_t* suite) {
 }
 
 static int test_generate_account_in_pool(test_suite_t* suite) {
-    log_message(LOG_INFO, "\nTesting account generation and pool loading...\n");
+    LOG_INFO_MACRO("\nTesting account generation and pool loading...\n");
     
     // Test 1: Generate account
     if (generate_account(&current_account) != 0) {
