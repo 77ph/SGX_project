@@ -968,7 +968,7 @@ static int test_generate_account_in_pool(test_suite_t* suite) {
 }
 
 static int test_sign_with_pool_account(test_suite_t* suite) {
-    log_message(LOG_INFO, "\nTesting sign_with_pool_account...\n");
+    LOG_INFO_MACRO("\nTesting sign_with_pool_account...\n");
     
     // Test 1: Sign with null account_id
     uint8_t test_message[32] = {0};
@@ -977,7 +977,7 @@ static int test_sign_with_pool_account(test_suite_t* suite) {
     print_test_result("Sign with null account_id", result == -1, "Expected -1 for null account_id");
     
     // Test 2: Generate, load and sign with test account
-    log_message(LOG_INFO, "\nGenerating test account...\n");
+    LOG_INFO_MACRO("\nGenerating test account...\n");
     if (generate_account(&current_account) != 0) {
         print_test_result("Generate test account", 0, "Failed to generate test account");
         return -1;
@@ -1053,7 +1053,7 @@ static int test_sign_with_pool_account(test_suite_t* suite) {
         secp256k1_context_destroy(ctx);
         return -1;
     }
-    
+
     // Verify signature
     if (!secp256k1_ecdsa_verify(ctx, &sig, test_message, &pubkey)) {
         print_test_result("Verify signature", 0, "Signature verification failed");
