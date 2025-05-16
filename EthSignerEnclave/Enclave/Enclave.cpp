@@ -770,7 +770,7 @@ static void print_test_suite_summary(const test_suite_t* suite) {
 
 // Test function for find_account_in_pool
 static int test_find_account_in_pool(test_suite_t* suite) {
-    log_message(LOG_DEBUG, "[TEST] Testing account lookup security measures...\n");
+    LOG_DEBUG_MACRO("[TEST] Testing account lookup security measures...\n");
     
     // Test 1: Find in empty pool
     uint8_t test_address[20] = {0};
@@ -778,7 +778,7 @@ static int test_find_account_in_pool(test_suite_t* suite) {
     print_test_result("Empty pool security check", result == -1, "Security check passed: empty pool correctly rejected");
     
     // Test 2: Add test account to pool
-    log_message(LOG_DEBUG, "[TEST] Setting up test environment...\n");
+    LOG_DEBUG_MACRO("[TEST] Setting up test environment...\n");
     if (generate_account(&current_account) != 0) {
         print_test_result("Test environment setup", 0, "Failed to set up test environment");
         return -1;
