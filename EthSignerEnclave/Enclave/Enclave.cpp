@@ -224,14 +224,14 @@ sgx_status_t generate_secure_private_key(uint8_t* private_key, size_t size) {
         return SGX_ERROR_INVALID_PARAMETER;
     }
     
-    // Step 1: Generate entropy
-    uint8_t entropy[128];
+    // Step 1: Generate entropy - reduced from 128 to 64 bytes as we only need 32 bytes output
+    uint8_t entropy[64];
     sgx_status_t status = generate_entropy(entropy, sizeof(entropy));
     if (status != SGX_SUCCESS) {
         log_message(LOG_ERROR, "Failed to generate entropy: %d\n", status);
         return status;
     }
-    log_message(LOG_INFO, "Generated initial entropy\n");
+    log_message(LOG_DEBUG, "Generated entropy of size %zu bytes\n", sizeof(entropy));
     
     // Step 2: Extract PRK using SHA-256 (HKDF-Extract)
     sgx_sha256_hash_t prk;
@@ -240,7 +240,7 @@ sgx_status_t generate_secure_private_key(uint8_t* private_key, size_t size) {
         log_message(LOG_ERROR, "Failed to extract PRK: %d\n", status);
         return status;
     }
-    log_message(LOG_INFO, "PRK extracted\n");
+    log_message(LOG_DEBUG, "PRK extracted, size: %zu bytes\n", sizeof(prk));
     
     // Step 3: Expand PRK with info string (HKDF-Expand)
     const char* info = "keygen";
@@ -259,14 +259,14 @@ sgx_status_t generate_secure_private_key(uint8_t* private_key, size_t size) {
         log_message(LOG_ERROR, "Failed to expand key: %d\n", status);
         return status;
     }
-    log_message(LOG_INFO, "Key expanded successfully\n");
+    log_message(LOG_DEBUG, "Key expanded, final size: %zu bytes\n", sizeof(final_hash));
     
     // Copy the final hash to the private key
     memcpy(private_key, final_hash, 32);
     
     // Verify key strength
     if (is_strong_private_key(private_key, size)) {
-        log_message(LOG_INFO, "Strong private key generated successfully\n");
+        log_message(LOG_INFO, "Private key generated successfully\n");
         return SGX_SUCCESS;
     }
     
