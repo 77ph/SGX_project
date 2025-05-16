@@ -1475,17 +1475,17 @@ int ecall_load_account_to_pool(const char* account_id) {
 }
 
 int ecall_unload_account_from_pool(const char* account_id) {
-    log_message(LOG_INFO, "Unloading account %s from pool...\n", account_id);
+    LOG_INFO_MACRO("Unloading account %s from pool...\n", account_id);
     
     if (!account_id) {
-        log_message(LOG_ERROR, "Invalid account ID\n");
+        LOG_ERROR_MACRO("Invalid account ID\n");
         return -1;
     }
 
     // Convert hex string to bytes
     uint8_t address[20];
     if (strlen(account_id) != 42 || account_id[0] != '0' || account_id[1] != 'x') {
-        log_message(LOG_ERROR, "Invalid account ID format\n");
+        LOG_ERROR_MACRO("Invalid account ID format\n");
         return -1;
     }
     
@@ -1497,23 +1497,23 @@ int ecall_unload_account_from_pool(const char* account_id) {
     // Find account in pool
     int pool_index = find_account_in_pool(address);
     if (pool_index == -1) {
-        log_message(LOG_WARNING, "WARNING: Account not found in pool\n");
+        LOG_WARN_MACRO("WARNING: Account not found in pool\n");
         return -1;
     }
-    log_message(LOG_DEBUG, "Found account at pool index %d\n", pool_index);
+    LOG_DEBUG_MACRO("Found account at pool index %d\n", pool_index);
 
     // Securely clear the slot
     secure_memzero(&account_pool.accounts[pool_index].account, sizeof(Account));
     account_pool.accounts[pool_index].account.use_count = 0;
-    log_message(LOG_DEBUG, "Account slot cleared at index %d\n", pool_index);
+    LOG_DEBUG_MACRO("Account slot cleared at index %d\n", pool_index);
 
     // Verify account was removed
     if (find_account_in_pool(address) != -1) {
-        log_message(LOG_ERROR, "Failed to verify account removal\n");
+        LOG_ERROR_MACRO("Failed to verify account removal\n");
         return -1;
     }
 
-    log_message(LOG_INFO, "Account successfully unloaded from pool\n");
+    LOG_INFO_MACRO("Account successfully unloaded from pool\n");
     return 0;
 }
 
