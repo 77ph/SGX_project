@@ -465,6 +465,9 @@ int ecall_sign_transaction(const uint8_t* tx_hash, size_t tx_hash_size,
     LOG_INFO_MACRO("Secp256k1 context created\n");
 
     // Sign the transaction
+    // Note: secp256k1_ecdsa_sign uses RFC6979 by default when noncefp and ndata are NULL
+    // This provides deterministic signatures (same input = same signature) and is secure
+    // as per RFC6979 specification
     secp256k1_ecdsa_signature sig;
     if (!secp256k1_ecdsa_sign(ctx, &sig, tx_hash, current_account.private_key, NULL, NULL)) {
         LOG_ERROR_MACRO("Failed to create signature\n");
@@ -697,6 +700,9 @@ int ecall_sign_message(const uint8_t* message, size_t message_len, uint8_t* sign
     LOG_INFO_MACRO("Secp256k1 context created\n");
 
     // Create signature
+    // Note: secp256k1_ecdsa_sign uses RFC6979 by default when noncefp and ndata are NULL
+    // This provides deterministic signatures (same input = same signature) and is secure
+    // as per RFC6979 specification
     secp256k1_ecdsa_signature sig;
     if (!secp256k1_ecdsa_sign(ctx, &sig, message, current_account.private_key, NULL, NULL)) {
         LOG_ERROR_MACRO("Failed to create signature\n");
@@ -1554,6 +1560,9 @@ int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message,
     LOG_DEBUG_MACRO("Secp256k1 context created\n");
 
     // Create signature
+    // Note: secp256k1_ecdsa_sign uses RFC6979 by default when noncefp and ndata are NULL
+    // This provides deterministic signatures (same input = same signature) and is secure
+    // as per RFC6979 specification
     secp256k1_ecdsa_signature sig;
     if (!secp256k1_ecdsa_sign(ctx, &sig, message, account_pool.accounts[pool_index].account.private_key, NULL, NULL)) {
         LOG_ERROR_MACRO("Failed to create signature\n");
