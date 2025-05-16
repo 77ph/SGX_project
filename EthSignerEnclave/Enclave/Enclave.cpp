@@ -378,48 +378,48 @@ static int generate_account(Account* account) {
 
 // Internal function to save account to pool
 static int save_account_to_pool(const char* account_id, const Account* account) {
-    log_message(LOG_INFO, "Saving account with ID: %s to pool\n", account_id);
+    LOG_INFO_MACRO("Saving account with ID: %s to pool\n", account_id);
     
     if (!account || !account->is_initialized) {
-        log_message(LOG_ERROR, "Account is not initialized\n");
+        LOG_ERROR_MACRO("Account is not initialized\n");
         return -1;
     }
 
     // Create structure for saving
     AccountFile data;
     memcpy(&data.account, account, sizeof(Account));
-    log_message(LOG_DEBUG, "Account data copied to save structure\n");
+    LOG_DEBUG_MACRO("Account data copied to save structure\n");
 
     // Calculate HMAC
     uint8_t computed_hash[32];
     sgx_status_t status = sgx_sha256_msg((const uint8_t*)&data, sizeof(AccountFile) - 32, (sgx_sha256_hash_t*)computed_hash);
     if (status != SGX_SUCCESS) {
-        log_message(LOG_ERROR, "Failed to calculate HMAC: %d\n", status);
+        LOG_ERROR_MACRO("Failed to calculate HMAC: %d\n", status);
         return -1;
     }
     memcpy(data.file_hmac, computed_hash, 32);
-    log_message(LOG_DEBUG, "HMAC calculated and stored\n");
+    LOG_DEBUG_MACRO("HMAC calculated and stored\n");
 
     // Encrypt data
     size_t sealed_size = sgx_calc_sealed_data_size(0, sizeof(AccountFile));
     if (sealed_size == UINT32_MAX) {
-        log_message(LOG_ERROR, "Failed to calculate sealed data size\n");
+        LOG_ERROR_MACRO("Failed to calculate sealed data size\n");
         return -1;
     }
 
     uint8_t* sealed_data = (uint8_t*)malloc(sealed_size);
     if (!sealed_data) {
-        log_message(LOG_ERROR, "Failed to allocate memory for sealed data\n");
+        LOG_ERROR_MACRO("Failed to allocate memory for sealed data\n");
         return -1;
     }
 
     status = sgx_seal_data(0, NULL, sizeof(AccountFile), (uint8_t*)&data, sealed_size, (sgx_sealed_data_t*)sealed_data);
     if (status != SGX_SUCCESS) {
-        log_message(LOG_ERROR, "Failed to seal data: %d\n", status);
+        LOG_ERROR_MACRO("Failed to seal data: %d\n", status);
         free(sealed_data);
         return -1;
     }
-    log_message(LOG_DEBUG, "Data sealed successfully\n");
+    LOG_DEBUG_MACRO("Data sealed successfully\n");
 
     // Save encrypted data using provided account_id as filename
     char filename[256];
@@ -430,11 +430,11 @@ static int save_account_to_pool(const char* account_id, const Account* account) 
     free(sealed_data);
     
     if (status != SGX_SUCCESS || ret != 0) {
-        log_message(LOG_ERROR, "Failed to save file: status=%d, ret=%d\n", status, ret);
+        LOG_ERROR_MACRO("Failed to save file: status=%d, ret=%d\n", status, ret);
         return -1;
     }
     
-    log_message(LOG_INFO, "Account saved successfully to %s\n", filename);
+    LOG_INFO_MACRO("Account saved successfully to %s\n", filename);
     return 0;
 }
 
