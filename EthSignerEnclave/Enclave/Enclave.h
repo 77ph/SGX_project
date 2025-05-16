@@ -112,7 +112,8 @@ Account* get_current_account(void);
 void keccak_256(const uint8_t* input, size_t input_len, uint8_t* output);
 
 int ecall_test_function(void);
-int ecall_generate_private_key(uint8_t* private_key, size_t private_key_size);
+// Removed as unused, functionality covered by ecall_generate_account_to_pool
+// int ecall_generate_private_key(uint8_t* private_key, size_t private_key_size);
 
 #if defined(__cplusplus)
 }

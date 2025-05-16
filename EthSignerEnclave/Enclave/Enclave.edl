@@ -9,10 +9,6 @@ enclave {
         // Простая тестовая функция
         public int ecall_test_function();
 
-        // Упрощенная генерация ключа
-        public int ecall_generate_private_key([out, size=32] uint8_t* private_key,
-                                           size_t private_key_size);
-
         // Упрощенная подпись (без передачи приватного ключа)
         public int ecall_sign_transaction([in, size=32] const uint8_t* tx_hash,
                                       size_t tx_hash_size,

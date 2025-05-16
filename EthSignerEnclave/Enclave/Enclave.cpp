@@ -1410,14 +1410,6 @@ int ecall_test_function() {
     return 0;
 }
 
-// Simplified key generation
-int ecall_generate_private_key(uint8_t* private_key, size_t private_key_size) {
-    if (!private_key || private_key_size != 32) {
-        return -1;
-    }
-    return generate_secure_private_key(private_key, private_key_size) == SGX_SUCCESS ? 0 : -1;
-}
-
 int ecall_load_account_to_pool(const char* account_id) {
     log_message(LOG_DEBUG, "[TEST] Loading account %s to pool...\n", account_id);
     
