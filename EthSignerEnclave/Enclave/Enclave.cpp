@@ -564,17 +564,17 @@ int ecall_save_account(const char* account_id) {
 
 
 int ecall_load_account(const char* account_id) {
-    log_message(LOG_INFO, "Loading account with ID: %s\n", account_id);
+    LOG_INFO_MACRO("Loading account with ID: %s\n", account_id);
     
     if (!account_id) {
-        log_message(LOG_ERROR, "Invalid account ID\n");
+        LOG_ERROR_MACRO("Invalid account ID\n");
         return -1;
     }
 
     // Открытие файла
     char filename[256];
     snprintf(filename, sizeof(filename), "%s.account", account_id);
-    log_message(LOG_DEBUG, "Opening file: %s\n", filename);
+    LOG_DEBUG_MACRO("Opening file: %s\n", filename);
     
     // Получение размера файла через OCALL
     uint8_t* sealed_data = NULL;
@@ -582,39 +582,39 @@ int ecall_load_account(const char* account_id) {
     int ret = 0;
     sgx_status_t ocall_status = ocall_read_from_file(&ret, NULL, 0, filename);
     if (ocall_status != SGX_SUCCESS || ret < 0) {
-        log_message(LOG_ERROR, "Failed to get file size: status=%d, ret=%d\n", ocall_status, ret);
+        LOG_ERROR_MACRO("Failed to get file size: status=%d, ret=%d\n", ocall_status, ret);
         return -1;
     }
     file_size = ret;
-    log_message(LOG_DEBUG, "File size: %zu bytes\n", file_size);
+    LOG_DEBUG_MACRO("File size: %zu bytes\n", file_size);
 
     // Чтение зашифрованных данных
     sealed_data = (uint8_t*)malloc(file_size);
     if (!sealed_data) {
-        log_message(LOG_ERROR, "Failed to allocate memory for sealed data\n");
+        LOG_ERROR_MACRO("Failed to allocate memory for sealed data\n");
         return -1;
     }
 
     ocall_status = ocall_read_from_file(&ret, sealed_data, file_size, filename);
     if (ocall_status != SGX_SUCCESS || ret != file_size) {
-        log_message(LOG_ERROR, "Failed to read file: status=%d, ret=%d\n", ocall_status, ret);
+        LOG_ERROR_MACRO("Failed to read file: status=%d, ret=%d\n", ocall_status, ret);
         free(sealed_data);
         return -1;
     }
-    log_message(LOG_DEBUG, "File read successfully\n");
+    LOG_DEBUG_MACRO("File read successfully\n");
 
     // Расшифровка данных
     uint32_t decrypted_size = sgx_get_encrypt_txt_len((sgx_sealed_data_t*)sealed_data);
     if (decrypted_size == UINT32_MAX) {
-        log_message(LOG_ERROR, "Failed to get decrypted size\n");
+        LOG_ERROR_MACRO("Failed to get decrypted size\n");
         free(sealed_data);
         return -1;
     }
-    log_message(LOG_DEBUG, "Decrypted size: %u bytes\n", decrypted_size);
+    LOG_DEBUG_MACRO("Decrypted size: %u bytes\n", decrypted_size);
 
     uint8_t* decrypted_data = (uint8_t*)malloc(decrypted_size);
     if (!decrypted_data) {
-        log_message(LOG_ERROR, "Failed to allocate memory for decrypted data\n");
+        LOG_ERROR_MACRO("Failed to allocate memory for decrypted data\n");
         free(sealed_data);
         return -1;
     }
@@ -623,22 +623,22 @@ int ecall_load_account(const char* account_id) {
     free(sealed_data);
 
     if (unseal_status != SGX_SUCCESS || decrypted_size != sizeof(AccountFile)) {
-        log_message(LOG_ERROR, "Failed to unseal data: status=%d, size=%u\n", unseal_status, decrypted_size);
+        LOG_ERROR_MACRO("Failed to unseal data: status=%d, size=%u\n", unseal_status, decrypted_size);
         free(decrypted_data);
         return -1;
     }
-    log_message(LOG_DEBUG, "Data unsealed successfully\n");
+    LOG_DEBUG_MACRO("Data unsealed successfully\n");
 
     // Проверка HMAC
     AccountFile* data = (AccountFile*)decrypted_data;
     uint8_t computed_hash[32];
     sgx_status_t hmac_status = sgx_sha256_msg((const uint8_t*)data, sizeof(AccountFile) - 32, (sgx_sha256_hash_t*)computed_hash);
     if (hmac_status != SGX_SUCCESS || memcmp(data->file_hmac, computed_hash, 32) != 0) {
-        log_message(LOG_ERROR, "HMAC verification failed\n");
+        LOG_ERROR_MACRO("HMAC verification failed\n");
         free(decrypted_data);
         return -1;
     }
-    log_message(LOG_DEBUG, "HMAC verified successfully\n");
+    LOG_DEBUG_MACRO("HMAC verified successfully\n");
 
     // Проверка адреса
     char expected_filename[256];
@@ -650,26 +650,26 @@ int ecall_load_account(const char* account_id) {
              data->account.address[16], data->account.address[17], data->account.address[18], data->account.address[19]);
     
     if (strcmp(filename, expected_filename) != 0) {
-        log_message(LOG_ERROR, "Account address mismatch\n");
+        LOG_ERROR_MACRO("Account address mismatch\n");
         free(decrypted_data);
         return -1;
     }
-    log_message(LOG_DEBUG, "Account address verified\n");
+    LOG_DEBUG_MACRO("Account address verified\n");
 
     // Копирование данных аккаунта
     memcpy(&current_account, &data->account, sizeof(Account));
     current_account.is_initialized = true;
-    log_message(LOG_DEBUG, "Account data copied successfully\n");
+    LOG_DEBUG_MACRO("Account data copied successfully\n");
 
     // Print first 8 bytes of private key for debugging
-    log_message(LOG_DEBUG, "First 8 bytes of loaded private key: ");
+    LOG_DEBUG_MACRO("First 8 bytes of loaded private key: ");
     for (int i = 0; i < 8; i++) {
-        log_message(LOG_DEBUG, "%02x ", current_account.private_key[i]);
+        LOG_DEBUG_MACRO("%02x ", current_account.private_key[i]);
     }
-    log_message(LOG_DEBUG, "\n");
+    LOG_DEBUG_MACRO("\n");
 
     free(decrypted_data);
-    log_message(LOG_INFO, "Account loaded successfully\n");
+    LOG_INFO_MACRO("Account loaded successfully\n");
     return 0;
 }
 
