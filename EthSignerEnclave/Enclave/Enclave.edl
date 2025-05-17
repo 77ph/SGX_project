@@ -10,10 +10,10 @@ enclave {
         public int ecall_test_function();
 
         // Упрощенная подпись (без передачи приватного ключа)
-        public int ecall_sign_transaction([in, size=32] const uint8_t* tx_hash,
-                                      size_t tx_hash_size,
-                                      [out, size=64] uint8_t* signature,
-                                      size_t signature_size);
+        // public int ecall_sign_transaction([in, size=32] const uint8_t* tx_hash,
+        //                               size_t tx_hash_size,
+        //                               [out, size=64] uint8_t* signature,
+        //                               size_t signature_size);
 
         // Account management functions
         // public int ecall_generate_account(void);  // Removed as it's now internal

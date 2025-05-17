@@ -415,6 +415,7 @@ static int save_account_to_pool(const char* account_id, const Account* account) 
 }
 
 // Enhanced transaction signing with security checks
+/*
 int ecall_sign_transaction(const uint8_t* tx_hash, size_t tx_hash_size,
                          uint8_t* signature, size_t signature_size) {
     LOG_INFO_MACRO("Starting transaction signing...\n");
@@ -477,6 +478,7 @@ int ecall_sign_transaction(const uint8_t* tx_hash, size_t tx_hash_size,
     LOG_INFO_MACRO("Transaction signing completed successfully\n");
     return 0;
 }
+*/
 
 // Функции для работы с аккаунтами
 int ecall_save_account(const char* account_id) {
