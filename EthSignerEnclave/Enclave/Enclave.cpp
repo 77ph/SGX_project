@@ -588,67 +588,6 @@ int ecall_load_account(const char* account_id) {
     return 0;
 }
 
-int ecall_sign_message(const uint8_t* message, size_t message_len, uint8_t* signature, size_t signature_len) {
-    LOG_INFO_MACRO("Starting message signing...\n");
-    
-    if (!message || !signature || message_len == 0 || signature_len < 64) {
-        LOG_ERROR_MACRO("Invalid parameters: message=%p, signature=%p, message_len=%zu, signature_len=%zu\n", 
-               message, signature, message_len, signature_len);
-        return -1;
-    }
-
-    if (!current_account.is_initialized) {
-        LOG_ERROR_MACRO("Account is not initialized\n");
-        return -1;
-    }
-    LOG_INFO_MACRO("Account is initialized\n");
-
-    // Create secp256k1 context
-    secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
-    if (!ctx) {
-        LOG_ERROR_MACRO("Failed to create secp256k1 context\n");
-        return -1;
-    }
-    LOG_INFO_MACRO("Secp256k1 context created\n");
-
-    // Create signature
-    // Note: secp256k1_ecdsa_sign uses RFC6979 by default when noncefp and ndata are NULL
-    // This provides deterministic signatures (same input = same signature) and is secure
-    // as per RFC6979 specification
-    secp256k1_ecdsa_signature sig;
-    if (!secp256k1_ecdsa_sign(ctx, &sig, message, current_account.private_key, NULL, NULL)) {
-        LOG_ERROR_MACRO("Failed to create signature\n");
-        secp256k1_context_destroy(ctx);
-        return -1;
-    }
-    LOG_DEBUG_MACRO("Signature created\n");
-
-    // Serialize signature
-    if (!secp256k1_ecdsa_signature_serialize_compact(ctx, signature, &sig)) {
-        LOG_ERROR_MACRO("Failed to serialize signature\n");
-        secp256k1_context_destroy(ctx);
-        return -1;
-    }
-    LOG_DEBUG_MACRO("Signature serialized\n");
-
-    // Increment use count
-    current_account.use_count++;
-    LOG_DEBUG_MACRO("Use count incremented to %u\n", current_account.use_count);
-
-    // Save account state to persist use_count
-    int save_result = save_account_to_pool("default", &current_account);
-    if (save_result != 0) {
-        LOG_ERROR_MACRO("Failed to save account state after signing\n");
-        secp256k1_context_destroy(ctx);
-        return -1;
-    }
-    LOG_DEBUG_MACRO("Account state saved after signing\n");
-
-    secp256k1_context_destroy(ctx);
-    LOG_INFO_MACRO("Message signing completed successfully\n");
-    return 0;
-}
-
 // Helper function to find account in pool by address
 static int find_account_in_pool(const uint8_t* address) {
     if (!address) {
