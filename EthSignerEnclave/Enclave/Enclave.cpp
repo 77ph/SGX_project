@@ -414,7 +414,8 @@ static int save_account_to_pool(const char* account_id, const Account* account) 
     return 0;
 }
 
-int ecall_load_account(const char* account_id) {
+// Helper function to load account from file
+static int load_account(const char* account_id) {
     LOG_INFO_MACRO("Loading account with ID: %s\n", account_id);
     
     if (!account_id) {
@@ -1136,7 +1137,7 @@ int ecall_load_account_to_pool(const char* account_id) {
     }
 
     // Load account
-    if (ecall_load_account(account_id) != 0) {
+    if (load_account(account_id) != 0) {
         LOG_DEBUG_MACRO("[TEST] Expected behavior: Failed to load account (test case)\n");
         return -1;
     }

@@ -81,9 +81,9 @@ typedef struct {
 sgx_status_t sgx_ecall_initialize();
 
 // Функции для работы с аккаунтами
-int ecall_load_account(const char* account_id);
-
-// Функции для работы с пулом аккаунтов
+// int ecall_generate_account(void);  // Removed as it's now internal
+// int ecall_save_account(const char* account_id);  // Removed as deprecated
+// int ecall_load_account(const char* account_id);  // Removed as it's now internal
 int ecall_load_account_to_pool(const char* account_id);
 int ecall_unload_account_from_pool(const char* account_id);
 int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message, size_t message_len, uint8_t* signature, size_t signature_len);
