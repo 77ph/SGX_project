@@ -84,7 +84,6 @@ sgx_status_t sgx_ecall_initialize();
 // int ecall_generate_account(void);  // Removed as it's now internal
 // int ecall_save_account(const char* account_id);  // Removed as deprecated
 int ecall_load_account(const char* account_id);
-// int ecall_sign_transaction(const uint8_t* tx_hash, size_t tx_hash_size, uint8_t* signature, size_t signature_size);
 int ecall_sign_message(const uint8_t* message, size_t message_len, uint8_t* signature, size_t signature_len);
 
 // Функции для работы с пулом аккаунтов
