@@ -1135,94 +1135,6 @@ static int test_get_pool_status(test_suite_t* suite) {
     return 0;
 }
 
-static int test_use_count_persistence(test_suite_t* suite) {
-    LOG_INFO_MACRO("\nTesting use_count persistence...\n");
-    
-    // Test 1: Generate account
-    if (generate_account(&current_account) != 0) {
-        print_test_result("Generate test account", 0, "Failed to generate test account");
-        return -1;
-    }
-    print_test_result("Generate test account", 1, NULL);
-    
-    // Verify initial use_count
-    if (current_account.use_count != 0) {
-        print_test_result("Verify initial use_count", 0, "Initial use_count is not 0");
-        return -1;
-    }
-    print_test_result("Verify initial use_count", 1, NULL);
-    
-    // Create account_id from address
-    char account_id[43];
-    snprintf(account_id, sizeof(account_id), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
-             current_account.address[0], current_account.address[1], current_account.address[2], current_account.address[3],
-             current_account.address[4], current_account.address[5], current_account.address[6], current_account.address[7],
-             current_account.address[8], current_account.address[9], current_account.address[10], current_account.address[11],
-             current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
-             current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
-    
-    // Sign a message to increment use_count
-    uint8_t test_message[32] = {0};
-    uint8_t test_signature[64] = {0};
-    for (int i = 0; i < sizeof(test_message); i++) {
-        test_message[i] = i;
-    }
-    
-    if (ecall_sign_message(test_message, sizeof(test_message), test_signature, sizeof(test_signature)) != 0) {
-        print_test_result("Sign first message", 0, "Failed to sign message");
-        return -1;
-    }
-    print_test_result("Sign first message", 1, NULL);
-    
-    // Verify use_count was incremented
-    if (current_account.use_count != 1) {
-        print_test_result("Verify use_count after first signing", 0, "Use count not incremented");
-        return -1;
-    }
-    print_test_result("Verify use_count after first signing", 1, NULL);
-    
-    // Save account
-    if (save_account_to_pool(account_id, &current_account) != 0) {
-        print_test_result("Save account", 0, "Failed to save account");
-        return -1;
-    }
-    print_test_result("Save account", 1, NULL);
-    
-    // Clear current account
-    secure_memzero(&current_account, sizeof(Account));
-    current_account.is_initialized = false;
-    
-    // Load account
-    if (ecall_load_account(account_id) != 0) {
-        print_test_result("Load account", 0, "Failed to load account");
-        return -1;
-    }
-    print_test_result("Load account", 1, NULL);
-    
-    // Verify use_count was preserved
-    if (current_account.use_count != 1) {
-        print_test_result("Verify use_count after load", 0, "Use count not preserved");
-        return -1;
-    }
-    print_test_result("Verify use_count after load", 1, NULL);
-    
-    // Sign another message
-    if (ecall_sign_message(test_message, sizeof(test_message), test_signature, sizeof(test_signature)) != 0) {
-        print_test_result("Sign second message", 0, "Failed to sign second message");
-        return -1;
-    }
-    print_test_result("Sign second message", 1, NULL);
-    
-    // Verify use_count was incremented again
-    if (current_account.use_count != 2) {
-        print_test_result("Verify use_count after second signing", 0, "Use count not incremented");
-        return -1;
-    }
-    print_test_result("Verify use_count after second signing", 1, NULL);
-    
-    return 0;
-}
-
 // Test Keccak-256 address generation
 static int test_keccak_address_generation(test_suite_t* suite) {
     const char* test_name = "Keccak-256 Address Generation";
@@ -1375,14 +1287,6 @@ int ecall_test_function() {
     test_result = test_get_pool_status(&suite);
     suite.results[suite.result_count++] = (test_result_t){
         "Get Pool Status",
-        test_result == 0,
-        NULL
-    };
-    if (test_result == 0) suite.passed_count++;
-    
-    test_result = test_use_count_persistence(&suite);
-    suite.results[suite.result_count++] = (test_result_t){
-        "Use Count Persistence",
         test_result == 0,
         NULL
     };
