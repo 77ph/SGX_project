@@ -540,7 +540,7 @@ static int find_account_in_pool(const uint8_t* address) {
         }
     }
 
-    LOG_DEBUG_MACRO("Account not found in pool (expected in test case)\n");
+    LOG_DEBUG_MACRO("Account not found in pool\n");
     return -1;
 }
 
@@ -567,8 +567,13 @@ static int test_find_account_in_pool(test_suite_t* suite) {
     LOG_DEBUG_MACRO("[TEST] Testing account lookup security measures...\n");
     
     // Test 1: Find in empty pool
-    uint8_t test_address[20] = {0};
-    int result = find_account_in_pool(test_address);
+    const char* test_address = "0x0000000000000000000000000000000000000000";
+    uint8_t address_bytes[20];
+    for (int i = 0; i < 20; i++) {
+        char byte_str[3] = {test_address[2 + i*2], test_address[2 + i*2 + 1], 0};
+        address_bytes[i] = (uint8_t)strtol(byte_str, NULL, 16);
+    }
+    int result = find_account_in_pool(address_bytes);
     print_test_result("Empty pool security check", result == -1, "Security check passed: empty pool correctly rejected");
     
     // Test 2: Add test account to pool
@@ -587,8 +592,13 @@ static int test_find_account_in_pool(test_suite_t* suite) {
     print_test_result("Valid account lookup", result == 0, "Security check passed: valid account found");
     
     // Test 4: Find non-existent account
-    uint8_t non_existent[20] = {0xFF}; // Different address
-    result = find_account_in_pool(non_existent);
+    const char* non_existent = "0xffffffffffffffffffffffffffffffffffffffff";
+    uint8_t non_existent_bytes[20];
+    for (int i = 0; i < 20; i++) {
+        char byte_str[3] = {non_existent[2 + i*2], non_existent[2 + i*2 + 1], 0};
+        non_existent_bytes[i] = (uint8_t)strtol(byte_str, NULL, 16);
+    }
+    result = find_account_in_pool(non_existent_bytes);
     print_test_result("Non-existent account security", result == -1, "Security check passed: non-existent account correctly rejected");
     
     // Test 5: Find with null address
@@ -1125,9 +1135,25 @@ int ecall_test_function() {
 int ecall_load_account_to_pool(const char* account_id) {
     LOG_DEBUG_MACRO("Loading account %s to pool...\n", account_id);
     
+    // Validate input parameters
     if (!account_id) {
-        LOG_ERROR_MACRO("Invalid account ID\n");
+        LOG_ERROR_MACRO("Invalid account ID: NULL pointer\n");
         return -1;
+    }
+
+    // Validate account_id format (should be "0x" followed by 40 hex characters)
+    if (strlen(account_id) != 42 || account_id[0] != '0' || account_id[1] != 'x') {
+        LOG_ERROR_MACRO("Invalid account ID format: %s (should be 0x followed by 40 hex characters)\n", account_id);
+        return -1;
+    }
+
+    // Validate hex characters
+    for (int i = 2; i < 42; i++) {
+        char c = account_id[i];
+        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
+            LOG_ERROR_MACRO("Invalid account ID: contains non-hex character '%c' at position %d\n", c, i);
+            return -1;
+        }
     }
 
     // Check if account is already in pool
