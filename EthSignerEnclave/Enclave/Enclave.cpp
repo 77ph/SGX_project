@@ -528,19 +528,19 @@ static int load_account(const char* account_id) {
 // Helper function to find account in pool by address
 static int find_account_in_pool(const uint8_t* address) {
     if (!address) {
-        LOG_DEBUG_MACRO("[TEST] Expected behavior: Invalid address parameter (test case)\n");
+        LOG_DEBUG_MACRO("Expected behavior: Invalid address parameter (test case)\n");
         return -1;
     }
 
     for (int i = 0; i < MAX_POOL_SIZE; i++) {
         if (account_pool.accounts[i].account.is_initialized &&
             memcmp(account_pool.accounts[i].account.address, address, 20) == 0) {
-            LOG_DEBUG_MACRO("[TEST] Found account at pool index %d\n", i);
+            LOG_DEBUG_MACRO("Found account at pool index %d\n", i);
             return i;
         }
     }
 
-    LOG_DEBUG_MACRO("[TEST] Account not found in pool (expected in test case)\n");
+    LOG_DEBUG_MACRO("Account not found in pool (expected in test case)\n");
     return -1;
 }
 
@@ -1123,22 +1123,22 @@ int ecall_test_function() {
 }
 
 int ecall_load_account_to_pool(const char* account_id) {
-    LOG_DEBUG_MACRO("[TEST] Loading account %s to pool...\n", account_id);
+    LOG_DEBUG_MACRO("Loading account %s to pool...\n", account_id);
     
     if (!account_id) {
-        LOG_DEBUG_MACRO("[TEST] Expected behavior: Invalid account ID (test case)\n");
+        LOG_ERROR_MACRO("Invalid account ID\n");
         return -1;
     }
 
     // Check if account is already in pool
     if (find_account_in_pool((const uint8_t*)account_id) != -1) {
-        LOG_DEBUG_MACRO("[TEST] Expected behavior: Account already in pool (test case)\n");
+        LOG_ERROR_MACRO("Account already in pool\n");
         return -1;
     }
 
     // Load account
     if (load_account(account_id) != 0) {
-        LOG_DEBUG_MACRO("[TEST] Expected behavior: Failed to load account (test case)\n");
+        LOG_ERROR_MACRO("Failed to load account\n");
         return -1;
     }
 
@@ -1152,7 +1152,7 @@ int ecall_load_account_to_pool(const char* account_id) {
     }
 
     if (free_slot == -1) {
-        LOG_DEBUG_MACRO("[TEST] Expected behavior: No free slots in pool (test case)\n");
+        LOG_ERROR_MACRO("No free slots in pool\n");
         return -1;
     }
 
@@ -1160,15 +1160,7 @@ int ecall_load_account_to_pool(const char* account_id) {
     memcpy(&account_pool.accounts[free_slot].account, &current_account, sizeof(Account));
     account_pool.accounts[free_slot].account.use_count = 0;
 
-    // Verify account was added correctly
-    if (find_account_in_pool(current_account.address) != free_slot) {
-        LOG_DEBUG_MACRO("[TEST] Expected behavior: Failed to verify account in pool (test case)\n");
-        secure_memzero(&account_pool.accounts[free_slot].account, sizeof(Account));
-        account_pool.accounts[free_slot].account.use_count = 0;
-        return -1;
-    }
-
-    LOG_DEBUG_MACRO("[TEST] Account successfully loaded to pool at index %d\n", free_slot);
+    LOG_DEBUG_MACRO("Account successfully loaded to pool at index %d\n", free_slot);
     return free_slot;
 }
 
@@ -1216,20 +1208,20 @@ int ecall_unload_account_from_pool(const char* account_id) {
 }
 
 int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message, size_t message_len, uint8_t* signature, size_t signature_len) {
-    LOG_DEBUG_MACRO("[TEST] Signing message with pool account %s...\n", account_id);
+    LOG_DEBUG_MACRO("Signing message with pool account %s...\n", account_id);
     
     if (!account_id || !message || !signature || message_len == 0 || signature_len < 64) {
-        LOG_DEBUG_MACRO("[TEST] Expected behavior: Invalid parameters (test case)\n");
+        LOG_ERROR_MACRO("Invalid parameters\n");
         return -1;
     }
 
     // Convert hex string to bytes
     uint8_t address[20];
     if (strlen(account_id) != 42 || account_id[0] != '0' || account_id[1] != 'x') {
-        LOG_DEBUG_MACRO("[TEST] Expected behavior: Invalid account ID format (test case)\n");
+        LOG_ERROR_MACRO("Invalid account ID format\n");
         return -1;
     }
-    
+
     for (int i = 0; i < 20; i++) {
         char byte_str[3] = {account_id[2 + i*2], account_id[2 + i*2 + 1], 0};
         address[i] = (uint8_t)strtol(byte_str, NULL, 16);
@@ -1238,10 +1230,10 @@ int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message,
     // Find account in pool
     int pool_index = find_account_in_pool(address);
     if (pool_index == -1) {
-        LOG_DEBUG_MACRO("[TEST] Expected behavior: Account not found in pool (test case)\n");
+        LOG_ERROR_MACRO("Account not found in pool\n");
         return -1;
     }
-    LOG_DEBUG_MACRO("[TEST] Found account at pool index %d\n", pool_index);
+    LOG_DEBUG_MACRO("Found account at pool index %d\n", pool_index);
 
     // Create secp256k1 context
     secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
@@ -1249,7 +1241,6 @@ int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message,
         LOG_ERROR_MACRO("Failed to create secp256k1 context\n");
         return -1;
     }
-    LOG_DEBUG_MACRO("Secp256k1 context created\n");
 
     // Create signature
     // Note: secp256k1_ecdsa_sign uses RFC6979 by default when noncefp and ndata are NULL
@@ -1261,7 +1252,6 @@ int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message,
         secp256k1_context_destroy(ctx);
         return -1;
     }
-    LOG_DEBUG_MACRO("Signature created\n");
 
     // Serialize signature
     if (!secp256k1_ecdsa_signature_serialize_compact(ctx, signature, &sig)) {
@@ -1269,7 +1259,6 @@ int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message,
         secp256k1_context_destroy(ctx);
         return -1;
     }
-    LOG_DEBUG_MACRO("Signature serialized\n");
 
     // Increment use count in Account
     account_pool.accounts[pool_index].account.use_count++;
@@ -1282,7 +1271,6 @@ int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message,
         secp256k1_context_destroy(ctx);
         return -1;
     }
-    LOG_DEBUG_MACRO("Account state saved after signing\n");
 
     secp256k1_context_destroy(ctx);
     LOG_INFO_MACRO("Message signing completed successfully\n");
