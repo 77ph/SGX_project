@@ -15,6 +15,22 @@
 
 #define ENCLAVE_BUFSIZ 1024
 
+// Простая реализация strcat без использования strlen
+static char* my_strcat(char* dest, const char* src) {
+    // Find end of dest string manually
+    char* ptr = dest;
+    while (*ptr != '\0') {
+        ptr++;
+    }
+    
+    // Copy src to end of dest, ensuring we don't overflow
+    while (*src != '\0' && (ptr - dest) < 4299) { // Leave room for null terminator
+        *ptr++ = *src++;
+    }
+    *ptr = '\0';
+    return dest;
+}
+
 // Logging levels
 #define LOG_ERROR 0
 #define LOG_WARNING 1
@@ -486,12 +502,11 @@ static int load_account(const char* account_id, Account* account) {
 
     // Проверка адреса
     char expected_filename[256];
-    snprintf(expected_filename, sizeof(expected_filename), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x.account",
-             data->account.address[0], data->account.address[1], data->account.address[2], data->account.address[3],
-             data->account.address[4], data->account.address[5], data->account.address[6], data->account.address[7],
-             data->account.address[8], data->account.address[9], data->account.address[10], data->account.address[11],
-             data->account.address[12], data->account.address[13], data->account.address[14], data->account.address[15],
-             data->account.address[16], data->account.address[17], data->account.address[18], data->account.address[19]);
+    snprintf(expected_filename, sizeof(expected_filename), "0x");
+    for (int i = 0; i < 20; i++) {
+        snprintf(expected_filename + 2 + i * 2, 3, "%02x", data->account.address[i]);
+    }
+    my_strcat(expected_filename, ".account");
     
     if (strcmp(filename, expected_filename) != 0) {
         LOG_ERROR_MACRO("Account address mismatch\n");
@@ -608,13 +623,10 @@ static int test_load_account_to_pool(test_suite_t* suite) {
     }
     
     // Create account_id from address
-    char account_id[43];
-    snprintf(account_id, sizeof(account_id), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
-             test_account.address[0], test_account.address[1], test_account.address[2], test_account.address[3],
-             test_account.address[4], test_account.address[5], test_account.address[6], test_account.address[7],
-             test_account.address[8], test_account.address[9], test_account.address[10], test_account.address[11],
-             test_account.address[12], test_account.address[13], test_account.address[14], test_account.address[15],
-             test_account.address[16], test_account.address[17], test_account.address[18], test_account.address[19]);
+    char account_id[43] = "0x";
+    for (int i = 0; i < 20; i++) {
+        snprintf(account_id + 2 + i * 2, 3, "%02x", test_account.address[i]);
+    }
     
     // Save account using its address as filename
     if (save_account_to_pool(account_id, &test_account) != 0) {
@@ -665,13 +677,10 @@ static int test_unload_account_from_pool(test_suite_t* suite) {
     }
 
     // Create account_id from address
-    char account_id[43];
-    snprintf(account_id, sizeof(account_id), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
-             test_account.address[0], test_account.address[1], test_account.address[2], test_account.address[3],
-             test_account.address[4], test_account.address[5], test_account.address[6], test_account.address[7],
-             test_account.address[8], test_account.address[9], test_account.address[10], test_account.address[11],
-             test_account.address[12], test_account.address[13], test_account.address[14], test_account.address[15],
-             test_account.address[16], test_account.address[17], test_account.address[18], test_account.address[19]);
+    char account_id[43] = "0x";
+    for (int i = 0; i < 20; i++) {
+        snprintf(account_id + 2 + i * 2, 3, "%02x", test_account.address[i]);
+    }
     
     // Save account using its address as filename
     if (save_account_to_pool(account_id, &test_account) != 0) {
@@ -714,13 +723,10 @@ static int test_generate_account_in_pool(test_suite_t* suite) {
     print_test_result("Generate account", 1, NULL);
 
     // Create account_id from address
-    char account_id[43];
-    snprintf(account_id, sizeof(account_id), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
-             test_account.address[0], test_account.address[1], test_account.address[2], test_account.address[3],
-             test_account.address[4], test_account.address[5], test_account.address[6], test_account.address[7],
-             test_account.address[8], test_account.address[9], test_account.address[10], test_account.address[11],
-             test_account.address[12], test_account.address[13], test_account.address[14], test_account.address[15],
-             test_account.address[16], test_account.address[17], test_account.address[18], test_account.address[19]);
+    char account_id[43] = "0x";
+    for (int i = 0; i < 20; i++) {
+        snprintf(account_id + 2 + i * 2, 3, "%02x", test_account.address[i]);
+    }
 
     // Save account using its address as filename
     if (save_account_to_pool(account_id, &test_account) != 0) {
@@ -771,13 +777,10 @@ static int test_sign_with_pool_account(test_suite_t* suite) {
     }
     
     // Create account_id from address
-    char account_id[43];
-    snprintf(account_id, sizeof(account_id), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
-             test_account.address[0], test_account.address[1], test_account.address[2], test_account.address[3],
-             test_account.address[4], test_account.address[5], test_account.address[6], test_account.address[7],
-             test_account.address[8], test_account.address[9], test_account.address[10], test_account.address[11],
-             test_account.address[12], test_account.address[13], test_account.address[14], test_account.address[15],
-             test_account.address[16], test_account.address[17], test_account.address[18], test_account.address[19]);
+    char account_id[43] = "0x";
+    for (int i = 0; i < 20; i++) {
+        snprintf(account_id + 2 + i * 2, 3, "%02x", test_account.address[i]);
+    }
     
     // Save account using its address as filename
     if (save_account_to_pool(account_id, &test_account) != 0) {
@@ -886,13 +889,10 @@ static int test_get_pool_status(test_suite_t* suite) {
     print_test_result("Generate test account", 1, NULL);
 
     // Create account_id from address
-    char account_id[43];
-    snprintf(account_id, sizeof(account_id), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
-             test_account.address[0], test_account.address[1], test_account.address[2], test_account.address[3],
-             test_account.address[4], test_account.address[5], test_account.address[6], test_account.address[7],
-             test_account.address[8], test_account.address[9], test_account.address[10], test_account.address[11],
-             test_account.address[12], test_account.address[13], test_account.address[14], test_account.address[15],
-             test_account.address[16], test_account.address[17], test_account.address[18], test_account.address[19]);
+    char account_id[43] = "0x";
+    for (int i = 0; i < 20; i++) {
+        snprintf(account_id + 2 + i * 2, 3, "%02x", test_account.address[i]);
+    }
 
     // Save account using its address as filename
     if (save_account_to_pool(account_id, &test_account) != 0) {
@@ -1297,22 +1297,6 @@ int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message,
     return 0;
 }
 
-// Простая реализация strcat без использования strlen
-static char* my_strcat(char* dest, const char* src) {
-    // Find end of dest string manually
-    char* ptr = dest;
-    while (*ptr != '\0') {
-        ptr++;
-    }
-    
-    // Copy src to end of dest, ensuring we don't overflow
-    while (*src != '\0' && (ptr - dest) < 4299) { // Leave room for null terminator
-        *ptr++ = *src++;
-    }
-    *ptr = '\0';
-    return dest;
-}
-
 int ecall_get_pool_status(uint32_t* total_accounts, uint32_t* active_accounts, char* account_addresses) {
     LOG_INFO_MACRO("Getting pool status...\n");
     
@@ -1331,17 +1315,10 @@ int ecall_get_pool_status(uint32_t* total_accounts, uint32_t* active_accounts, c
         if (account_pool.accounts[i].account.is_initialized) {
             // Convert address to hex string
             char address[43];
-            snprintf(address, sizeof(address), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
-                    account_pool.accounts[i].account.address[0], account_pool.accounts[i].account.address[1],
-                    account_pool.accounts[i].account.address[2], account_pool.accounts[i].account.address[3],
-                    account_pool.accounts[i].account.address[4], account_pool.accounts[i].account.address[5],
-                    account_pool.accounts[i].account.address[6], account_pool.accounts[i].account.address[7],
-                    account_pool.accounts[i].account.address[8], account_pool.accounts[i].account.address[9],
-                    account_pool.accounts[i].account.address[10], account_pool.accounts[i].account.address[11],
-                    account_pool.accounts[i].account.address[12], account_pool.accounts[i].account.address[13],
-                    account_pool.accounts[i].account.address[14], account_pool.accounts[i].account.address[15],
-                    account_pool.accounts[i].account.address[16], account_pool.accounts[i].account.address[17],
-                    account_pool.accounts[i].account.address[18], account_pool.accounts[i].account.address[19]);
+            snprintf(address, sizeof(address), "0x");
+            for (int j = 0; j < 20; j++) {
+                snprintf(address + 2 + j * 2, 3, "%02x", account_pool.accounts[i].account.address[j]);
+            }
             
             // Add to total count
             (*total_accounts)++;
@@ -1383,12 +1360,10 @@ int ecall_generate_account_to_pool(char* account_address) {
     LOG_INFO_MACRO("Account generated successfully\n");
 
     // Format address as hex string
-    snprintf(account_address, 43, "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
-             new_account.address[0], new_account.address[1], new_account.address[2], new_account.address[3],
-             new_account.address[4], new_account.address[5], new_account.address[6], new_account.address[7],
-             new_account.address[8], new_account.address[9], new_account.address[10], new_account.address[11],
-             new_account.address[12], new_account.address[13], new_account.address[14], new_account.address[15],
-             new_account.address[16], new_account.address[17], new_account.address[18], new_account.address[19]);
+    char account_id[43] = "0x";
+    for (int i = 0; i < 20; i++) {
+        snprintf(account_id + 2 + i * 2, 3, "%02x", new_account.address[i]);
+    }
 
     // Find free slot in pool
     int free_slot = -1;
