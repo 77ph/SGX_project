@@ -14,6 +14,49 @@
 #include "sha3.h"  // Добавляем для Keccak-256
 
 #define ENCLAVE_BUFSIZ 1024
+// Logging levels
+#define LOG_ERROR 0
+#define LOG_WARNING 1
+#define LOG_INFO  2
+#define LOG_DEBUG 3
+// Temporary debug flag
+#define SGX_DEBUG 1
+
+#if defined(SGX_DEBUG) && SGX_DEBUG == 1
+    #define LOG_DEBUG_MACRO(...) log_message(LOG_DEBUG, __VA_ARGS__)
+    #define LOG_INFO_MACRO(...)  log_message(LOG_INFO,  __VA_ARGS__)
+    #define LOG_WARN_MACRO(...)  log_message(LOG_WARNING,  __VA_ARGS__)
+    #define LOG_ERROR_MACRO(...) log_message(LOG_ERROR, __VA_ARGS__)
+#else
+    #define LOG_DEBUG_MACRO(...) do {} while(0)
+    #define LOG_INFO_MACRO(...)  do {} while(0)
+    #define LOG_WARN_MACRO(...)  do {} while(0)
+    #define LOG_ERROR_MACRO(...) log_message(LOG_ERROR, __VA_ARGS__)
+#endif
+
+// Test result structure
+typedef struct {
+    const char* test_name;
+    int passed;
+    const char* error_message;
+} test_result_t;
+
+// Test suite structure
+typedef struct {
+    const char* suite_name;
+    test_result_t* results;
+    int result_count;
+    int passed_count;
+} test_suite_t;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Default log level
+static int g_log_level = LOG_DEBUG;
+// Global pool instance
+static AccountPool account_pool = {0};
 
 // Простая реализация strcat без использования strlen
 static char* my_strcat(char* dest, const char* src) {
@@ -31,29 +74,15 @@ static char* my_strcat(char* dest, const char* src) {
     return dest;
 }
 
-// Logging levels
-#define LOG_ERROR 0
-#define LOG_WARNING 1
-#define LOG_INFO  2
-#define LOG_DEBUG 3
-
-// Default log level
-static int g_log_level = LOG_DEBUG;
-
-// Temporary debug flag
-#define SGX_DEBUG 1
-
-#if defined(SGX_DEBUG) && SGX_DEBUG == 1
-    #define LOG_DEBUG_MACRO(...) log_message(LOG_DEBUG, __VA_ARGS__)
-    #define LOG_INFO_MACRO(...)  log_message(LOG_INFO,  __VA_ARGS__)
-    #define LOG_WARN_MACRO(...)  log_message(LOG_WARNING,  __VA_ARGS__)
-    #define LOG_ERROR_MACRO(...) log_message(LOG_ERROR, __VA_ARGS__)
-#else
-    #define LOG_DEBUG_MACRO(...) do {} while(0)
-    #define LOG_INFO_MACRO(...)  do {} while(0)
-    #define LOG_WARN_MACRO(...)  do {} while(0)
-    #define LOG_ERROR_MACRO(...) log_message(LOG_ERROR, __VA_ARGS__)
-#endif
+int printf(const char* fmt, ...) {
+    char buf[ENCLAVE_BUFSIZ] = { '\0' };
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, ENCLAVE_BUFSIZ, fmt, ap);
+    va_end(ap);
+    ocall_print(buf);
+    return 0;
+}
 
 // Logging function
 static void log_message(int level, const char* format, ...) {
@@ -66,50 +95,6 @@ static void log_message(int level, const char* format, ...) {
     va_end(args);
     ocall_print(buf);
 }
-
-// Function to set log level
-int ecall_set_log_level(int level) {
-    if (level < LOG_ERROR || level > LOG_DEBUG) {
-        return -1;
-    }
-    g_log_level = level;
-    return 0;
-}
-
-// Test result structure
-typedef struct {
-    const char* test_name;
-    int passed;
-    const char* error_message;
-} test_result_t;
-
-// Test suite structure
-typedef struct {
-    const char* suite_name;
-    test_result_t* results;
-    int result_count;
-    int passed_count;
-} test_suite_t;
-
-// Определение printf для использования в энклаве
-extern "C" {
-    int printf(const char* fmt, ...) {
-        char buf[ENCLAVE_BUFSIZ] = { '\0' };
-        va_list ap;
-        va_start(ap, fmt);
-        vsnprintf(buf, ENCLAVE_BUFSIZ, fmt, ap);
-        va_end(ap);
-        ocall_print(buf);
-        return 0;
-    }
-}
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-// Global pool instance
-static AccountPool account_pool = {0};
 
 // Initialize account pool
 static bool initialize_account_pool() {
@@ -124,23 +109,6 @@ static bool initialize_account_pool() {
     LOG_DEBUG_MACRO("Account pool initialized with %d slots\n", MAX_POOL_SIZE);
     return true;
 }
-
-// Enclave initialization function
-sgx_status_t sgx_ecall_initialize() {
-    LOG_INFO_MACRO("Initializing enclave...\n");
-    
-    // Initialize account pool
-    if (!initialize_account_pool()) {
-        LOG_ERROR_MACRO("Failed to initialize account pool\n");
-        return SGX_ERROR_UNEXPECTED;
-    }
-    
-    LOG_INFO_MACRO("Enclave initialized successfully\n");
-    return SGX_SUCCESS;
-}
-
-// Security constants
-// MIN_ENTROPY_BITS is defined in Enclave.h
 
 // Helper function to securely zero memory
 void secure_memzero(void* ptr, size_t len) {
@@ -204,7 +172,7 @@ bool is_strong_private_key(const uint8_t* private_key, size_t size) {
     return is_valid;
 }
 
-// Enhanced entropy generation using double SHA-256
+// Enhanced entropy generation
 sgx_status_t generate_entropy(uint8_t* entropy, size_t size) {
     if (!entropy || size == 0) {
         return SGX_ERROR_INVALID_PARAMETER;
@@ -1032,6 +1000,29 @@ static int test_keccak_address_generation(test_suite_t* suite) {
     
     secp256k1_context_destroy(ctx);
     print_test_result(test_name, 1, NULL);
+    return 0;
+}
+
+// Enclave initialization function
+sgx_status_t sgx_ecall_initialize() {
+    LOG_INFO_MACRO("Initializing enclave...\n");
+    
+    // Initialize account pool
+    if (!initialize_account_pool()) {
+        LOG_ERROR_MACRO("Failed to initialize account pool\n");
+        return SGX_ERROR_UNEXPECTED;
+    }
+    
+    LOG_INFO_MACRO("Enclave initialized successfully\n");
+    return SGX_SUCCESS;
+}
+
+// Function to set log level
+int ecall_set_log_level(int level) {
+    if (level < LOG_ERROR || level > LOG_DEBUG) {
+        return -1;
+    }
+    g_log_level = level;
     return 0;
 }
 
