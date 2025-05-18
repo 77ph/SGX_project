@@ -1359,10 +1359,10 @@ int ecall_generate_account_to_pool(char* account_address) {
     }
     LOG_INFO_MACRO("Account generated successfully\n");
 
-    // Format address as hex string
-    char account_id[43] = "0x";
+    // Format address as hex string in the provided buffer
+    snprintf(account_address, 43, "0x");
     for (int i = 0; i < 20; i++) {
-        snprintf(account_id + 2 + i * 2, 3, "%02x", new_account.address[i]);
+        snprintf(account_address + 2 + i * 2, 3, "%02x", new_account.address[i]);
     }
 
     // Find free slot in pool
@@ -1383,6 +1383,7 @@ int ecall_generate_account_to_pool(char* account_address) {
     // Copy account to pool
     memcpy(&account_pool.accounts[free_slot].account, &new_account, sizeof(Account));
     account_pool.accounts[free_slot].account.use_count = 0;
+    account_pool.accounts[free_slot].account.is_initialized = true;
     LOG_INFO_MACRO("Account copied to pool at index %d\n", free_slot);
 
     LOG_INFO_MACRO("Account successfully generated in pool at index %d\n", free_slot);
