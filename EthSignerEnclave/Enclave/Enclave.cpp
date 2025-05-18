@@ -92,9 +92,6 @@ extern "C" {
 extern "C" {
 #endif
 
-// Global account instance
-static Account current_account = {0};
-
 // Global pool instance
 static AccountPool account_pool = {0};
 
@@ -263,11 +260,6 @@ sgx_status_t generate_secure_private_key(uint8_t* private_key, size_t size) {
     
     LOG_ERROR_MACRO("Generated key did not meet strength requirements\n");
     return SGX_ERROR_UNEXPECTED;
-}
-
-// Helper function to get current account
-Account* get_current_account(void) {
-    return &current_account;
 }
 
 void keccak_256(const uint8_t* input, size_t input_len, uint8_t* output) {

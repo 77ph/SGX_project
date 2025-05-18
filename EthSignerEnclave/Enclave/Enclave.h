@@ -105,7 +105,6 @@ double calculate_entropy(const uint8_t* data, size_t size);
 bool is_strong_private_key(const uint8_t* private_key, size_t size);
 sgx_status_t generate_secure_private_key(uint8_t* private_key, size_t size);
 bool add_account_to_pool(const char* account_id, const Account& account);
-Account* get_current_account(void);
 void keccak_256(const uint8_t* input, size_t input_len, uint8_t* output);
 
 int ecall_test_function(void);
