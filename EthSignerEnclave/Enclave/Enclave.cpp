@@ -728,7 +728,8 @@ static int test_generate_account_in_pool(test_suite_t* suite) {
     LOG_INFO_MACRO("\nTesting account generation and pool loading...\n");
     
     // Test 1: Generate account
-    if (generate_account(&current_account) != 0) {
+    Account test_account = {0};
+    if (generate_account(&test_account) != 0) {
         print_test_result("Generate account", 0, "Failed to generate account");
         return -1;
     }
@@ -737,14 +738,14 @@ static int test_generate_account_in_pool(test_suite_t* suite) {
     // Create account_id from address
     char account_id[43];
     snprintf(account_id, sizeof(account_id), "0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
-             current_account.address[0], current_account.address[1], current_account.address[2], current_account.address[3],
-             current_account.address[4], current_account.address[5], current_account.address[6], current_account.address[7],
-             current_account.address[8], current_account.address[9], current_account.address[10], current_account.address[11],
-             current_account.address[12], current_account.address[13], current_account.address[14], current_account.address[15],
-             current_account.address[16], current_account.address[17], current_account.address[18], current_account.address[19]);
+             test_account.address[0], test_account.address[1], test_account.address[2], test_account.address[3],
+             test_account.address[4], test_account.address[5], test_account.address[6], test_account.address[7],
+             test_account.address[8], test_account.address[9], test_account.address[10], test_account.address[11],
+             test_account.address[12], test_account.address[13], test_account.address[14], test_account.address[15],
+             test_account.address[16], test_account.address[17], test_account.address[18], test_account.address[19]);
 
     // Save account using its address as filename
-    if (save_account_to_pool(account_id, &current_account) != 0) {
+    if (save_account_to_pool(account_id, &test_account) != 0) {
         print_test_result("Save account", 0, "Failed to save test account");
         return -1;
     }
