@@ -415,11 +415,11 @@ static int save_account_to_pool(const char* account_id, const Account* account) 
 }
 
 // Helper function to load account from file
-static int load_account(const char* account_id) {
+static int load_account(const char* account_id, Account* account) {
     LOG_INFO_MACRO("Loading account with ID: %s\n", account_id);
     
-    if (!account_id) {
-        LOG_ERROR_MACRO("Invalid account ID\n");
+    if (!account_id || !account) {
+        LOG_ERROR_MACRO("Invalid parameters: account_id=%p, account=%p\n", account_id, account);
         return -1;
     }
 
@@ -509,14 +509,14 @@ static int load_account(const char* account_id) {
     LOG_DEBUG_MACRO("Account address verified\n");
 
     // Копирование данных аккаунта
-    memcpy(&current_account, &data->account, sizeof(Account));
-    current_account.is_initialized = true;
+    memcpy(account, &data->account, sizeof(Account));
+    account->is_initialized = true;
     LOG_DEBUG_MACRO("Account data copied successfully\n");
 
     // Print first 8 bytes of private key for debugging
     LOG_DEBUG_MACRO("First 8 bytes of loaded private key: ");
     for (int i = 0; i < 8; i++) {
-        LOG_DEBUG_MACRO("%02x ", current_account.private_key[i]);
+        LOG_DEBUG_MACRO("%02x ", account->private_key[i]);
     }
     LOG_DEBUG_MACRO("\n");
 
@@ -578,17 +578,18 @@ static int test_find_account_in_pool(test_suite_t* suite) {
     
     // Test 2: Add test account to pool
     LOG_DEBUG_MACRO("[TEST] Setting up test environment...\n");
-    if (generate_account(&current_account) != 0) {
+    Account test_account = {0};
+    if (generate_account(&test_account) != 0) {
         print_test_result("Test environment setup", 0, "Failed to set up test environment");
         return -1;
     }
     
     // Add to pool at index 0
-    memcpy(&account_pool.accounts[0].account, &current_account, sizeof(Account));
+    memcpy(&account_pool.accounts[0].account, &test_account, sizeof(Account));
     account_pool.accounts[0].account.use_count = 0;
     
     // Test 3: Find existing account
-    result = find_account_in_pool(current_account.address);
+    result = find_account_in_pool(test_account.address);
     print_test_result("Valid account lookup", result == 0, "Security check passed: valid account found");
     
     // Test 4: Find non-existent account
@@ -1162,8 +1163,9 @@ int ecall_load_account_to_pool(const char* account_id) {
         return -1;
     }
 
-    // Load account
-    if (load_account(account_id) != 0) {
+    // Load account into temporary variable
+    Account temp_account = {0};
+    if (load_account(account_id, &temp_account) != 0) {
         LOG_ERROR_MACRO("Failed to load account\n");
         return -1;
     }
@@ -1183,7 +1185,7 @@ int ecall_load_account_to_pool(const char* account_id) {
     }
 
     // Copy account to pool
-    memcpy(&account_pool.accounts[free_slot].account, &current_account, sizeof(Account));
+    memcpy(&account_pool.accounts[free_slot].account, &temp_account, sizeof(Account));
     account_pool.accounts[free_slot].account.use_count = 0;
 
     LOG_DEBUG_MACRO("Account successfully loaded to pool at index %d\n", free_slot);
