@@ -24,33 +24,12 @@ extern void* g_global_data;
 extern void* g_peak_heap_used;
 extern void* g_peak_rsrv_mem_committed;
 
-#define MAX_ACCOUNTS 1000  // Максимальное количество одновременно открытых аккаунтов
-#define ACCOUNT_CACHE_TIMEOUT 300  // Таймаут кэша в секундах
 
-// Константы для проверки слабых ключей
-#define WEAK_KEY_PATTERNS_COUNT 5
-#define MAX_REPEATED_BYTES 4  // Максимальное количество повторений одного байта
-#define MIN_ENTROPY_PER_BYTE 4.5  // Минимальная энтропия на байт (300/64 ≈ 4.69)
-
-// Константы для secp256k1
-#define SECP256K1_N "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141"
-#define SECP256K1_N_BYTES 32
-#define SECP256K1_KEY_SIZE 32
-
-// Константы для ротации ключей
-#define KEY_ROTATION_INTERVAL 86400  // 24 часа в секундах
-#define KEY_ROTATION_WARNING_TIME 82800  // 23 часа в секундах
-#define MAX_KEY_AGE 604800  // 7 дней в секундах
 
 // Константы
-#define MAX_ACCOUNT_ID_LEN 32
 #define MAX_POOL_SIZE 100  // Увеличиваем размер пула до 100 аккаунтов
-
-// Security constants
-#define MIN_ENTROPY_BITS 256
-#define KEY_GENERATION_MAX_ATTEMPTS 100
-#define MIN_PRIVATE_KEY_VALUE 0x1000000000000000ULL
-#define MAX_PRIVATE_KEY_VALUE 0xFFFFFFFFFFFFFFFFULL
+#define ADDRESS_SIZE 20
+#define INDEX_TABLE_CAPACITY 2048
 
 // Структура для хранения данных аккаунта
 typedef struct {
@@ -76,6 +55,12 @@ typedef struct {
 typedef struct {
     PoolAccount accounts[MAX_POOL_SIZE];
 } AccountPool;
+
+typedef struct {
+    uint8_t address[ADDRESS_SIZE];  // ключ
+    int index;                      // индекс в account_pool
+    int is_occupied;                // 0 = пусто, 1 = занято
+} AccountIndexEntry;
 
 // Enclave initialization
 sgx_status_t sgx_ecall_initialize();
