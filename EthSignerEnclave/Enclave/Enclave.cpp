@@ -58,6 +58,8 @@ static int g_log_level = LOG_DEBUG;
 // Global pool instance
 static AccountPool account_pool = {0};
 
+static AccountIndexEntry account_index_table[INDEX_TABLE_CAPACITY] = {0};
+
 // Простая реализация strcat без использования strlen
 static char* my_strcat(char* dest, const char* src) {
     // Find end of dest string manually
@@ -74,6 +76,7 @@ static char* my_strcat(char* dest, const char* src) {
     return dest;
 }
 
+/* Unused
 int printf(const char* fmt, ...) {
     char buf[ENCLAVE_BUFSIZ] = { '\0' };
     va_list ap;
@@ -83,6 +86,7 @@ int printf(const char* fmt, ...) {
     ocall_print(buf);
     return 0;
 }
+*/
 
 // Logging function
 static void log_message(int level, const char* format, ...) {
@@ -115,6 +119,63 @@ void secure_memzero(void* ptr, size_t len) {
     volatile unsigned char* p = (volatile unsigned char*)ptr;
     while (len--) {
         *p++ = 0;
+    }
+}
+
+static uint32_t address_hash(const uint8_t* address) {
+    uint32_t hash = 5381;
+    for (int i = 0; i < ADDRESS_SIZE; i++) {
+        hash = ((hash << 5) + hash) + address[i];  // hash * 33 + address[i]
+    }
+    return hash % INDEX_TABLE_CAPACITY;
+}
+
+bool account_index_insert(const uint8_t* address, int index) {
+    uint32_t hash = address_hash(address);
+    for (int i = 0; i < INDEX_TABLE_CAPACITY; i++) {
+        uint32_t pos = (hash + i) % INDEX_TABLE_CAPACITY;
+        if (!account_index_table[pos].is_occupied) {
+            memcpy(account_index_table[pos].address, address, ADDRESS_SIZE);
+            account_index_table[pos].index = index;
+            account_index_table[pos].is_occupied = 1;
+            return true;
+        }
+    }
+    return false; // таблица переполнена
+}
+
+int account_index_lookup(const uint8_t* address) {
+    uint32_t hash = address_hash(address);
+    for (int i = 0; i < INDEX_TABLE_CAPACITY; i++) {
+        uint32_t pos = (hash + i) % INDEX_TABLE_CAPACITY;
+        if (!account_index_table[pos].is_occupied) {
+            return -1; // не найдено
+        }
+        if (memcmp(account_index_table[pos].address, address, ADDRESS_SIZE) == 0) {
+            return account_index_table[pos].index;
+        }
+    }
+    return -1;
+}
+
+bool account_index_remove(const uint8_t* address) {
+    uint32_t hash = address_hash(address);
+    for (int i = 0; i < INDEX_TABLE_CAPACITY; i++) {
+        uint32_t pos = (hash + i) % INDEX_TABLE_CAPACITY;
+        if (!account_index_table[pos].is_occupied) {
+            return false;
+        }
+        if (memcmp(account_index_table[pos].address, address, ADDRESS_SIZE) == 0) {
+            account_index_table[pos].is_occupied = 0;
+            return true;
+        }
+    }
+    return false;
+}
+
+void account_index_clear() {
+    for (int i = 0; i < INDEX_TABLE_CAPACITY; i++) {
+        account_index_table[i].is_occupied = 0;
     }
 }
 
@@ -254,7 +315,6 @@ void keccak_256(const uint8_t* input, size_t input_len, uint8_t* output) {
     const uint8_t* hash = (const uint8_t*)sha3_Finalize(&ctx);
     memcpy(output, hash, 32);
 }
-
 
 // Internal function to generate account
 static int generate_account(Account* account) {
