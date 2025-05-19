@@ -1095,6 +1095,10 @@ static int test_keccak_address_generation(test_suite_t* suite) {
 
 // Test function for testing pool capacity and hash table functionality
 static int test_pool_capacity_and_hash_table(test_suite_t* suite) {
+    // Set log level to ERROR to reduce output
+    int old_log_level = g_log_level;
+    g_log_level = LOG_ERROR;
+    
     LOG_INFO_MACRO("Testing pool capacity and hash table functionality...\n");
     
     // Clear pool and hash table before testing
@@ -1103,15 +1107,10 @@ static int test_pool_capacity_and_hash_table(test_suite_t* suite) {
         account_pool.accounts[i].account.is_initialized = false;
     }
     account_index_clear();
-    LOG_INFO_MACRO("Pool and hash table cleared\n");
     
     // Array to store generated account addresses
     char account_addresses[MAX_POOL_SIZE][43]; // 0x + 40 hex chars + null terminator
     int generated_count = 0;
-    
-    // Save current log level and set to DEBUG to see hash table operations
-    int old_log_level = g_log_level;
-    g_log_level = LOG_DEBUG;
     
     // Generate accounts until pool is full
     while (generated_count < MAX_POOL_SIZE) {
@@ -1119,12 +1118,9 @@ static int test_pool_capacity_and_hash_table(test_suite_t* suite) {
         int result = ecall_generate_account_to_pool(address);
         if (result < 0) {
             LOG_ERROR_MACRO("Failed to generate account %d\n", generated_count);
-            g_log_level = old_log_level;
+            g_log_level = old_log_level; // Restore original log level
             return -1;
         }
-        LOG_INFO_MACRO("Generated account %d at index %d\n", generated_count, result);
-
-        // Store address
         strncpy(account_addresses[generated_count], address, 42);
         account_addresses[generated_count][42] = '\0';
         generated_count++;
@@ -1135,29 +1131,25 @@ static int test_pool_capacity_and_hash_table(test_suite_t* suite) {
     int result = ecall_generate_account_to_pool(extra_address);
     if (result >= 0) {
         LOG_ERROR_MACRO("Pool should be full but generated extra account\n");
-        g_log_level = old_log_level;
+        g_log_level = old_log_level; // Restore original log level
         return -1;
     }
-    LOG_INFO_MACRO("Successfully verified pool is full\n");
 
     // Verify all accounts can be found
     for (int i = 0; i < generated_count; i++) {
         uint8_t address_bytes[20];
-        // Convert hex string to bytes
         for (int j = 0; j < 20; j++) {
             char byte_str[3] = {account_addresses[i][2+j*2], account_addresses[i][2+j*2+1], '\0'};
             address_bytes[j] = (uint8_t)strtol(byte_str, NULL, 16);
         }
         
-        LOG_DEBUG_MACRO("\nTrying to find account %s in pool...\n", account_addresses[i]);
         int pool_index;
         bool found = find_account_in_pool(address_bytes, &pool_index) >= 0;
         if (!found) {
             LOG_ERROR_MACRO("Failed to find account %s in pool\n", account_addresses[i]);
-            g_log_level = old_log_level;
+            g_log_level = old_log_level; // Restore original log level
             return -1;
         }
-        LOG_DEBUG_MACRO("Successfully found account at index %d\n", pool_index);
     }
     
     // Unload all accounts
@@ -1165,13 +1157,10 @@ static int test_pool_capacity_and_hash_table(test_suite_t* suite) {
         result = ecall_unload_account_from_pool(account_addresses[i]);
         if (result != 0) {
             LOG_ERROR_MACRO("Failed to unload account %s\n", account_addresses[i]);
-            g_log_level = old_log_level;
+            g_log_level = old_log_level; // Restore original log level
             return -1;
         }
     }
-    
-    // Restore original log level
-    g_log_level = old_log_level;
     
     // Verify pool is empty
     uint32_t total_accounts, active_accounts;
@@ -1179,10 +1168,12 @@ static int test_pool_capacity_and_hash_table(test_suite_t* suite) {
     result = ecall_get_pool_status(&total_accounts, &active_accounts, addresses);
     if (result != 0 || total_accounts != 0 || active_accounts != 0) {
         LOG_ERROR_MACRO("Pool should be empty but contains accounts\n");
+        g_log_level = old_log_level; // Restore original log level
         return -1;
     }
-    LOG_INFO_MACRO("Verified pool is empty\n");
     
+    // Restore original log level before returning
+    g_log_level = old_log_level;
     LOG_INFO_MACRO("Pool capacity and hash table test passed\n");
     return 0;
 }
@@ -1300,9 +1291,6 @@ int ecall_test_function() {
     
     // Clean up
     free(suite.results);
-    
-    LOG_INFO_MACRO("=== System Tests Completed Successfully ===\n");
-    LOG_INFO_MACRO("All security and functionality tests passed. The system is secure and ready for use.\n");
     
     return 0;
 }
