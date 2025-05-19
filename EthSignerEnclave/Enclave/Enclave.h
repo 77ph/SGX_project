@@ -31,6 +31,11 @@ extern void* g_peak_rsrv_mem_committed;
 #define ADDRESS_SIZE 20
 #define INDEX_TABLE_CAPACITY 2048
 
+// Состояния слота в хеш-таблице
+#define SLOT_EMPTY 0
+#define SLOT_OCCUPIED 1
+#define SLOT_DELETED 2
+
 // Структура для хранения данных аккаунта
 typedef struct {
     uint8_t private_key[32];
@@ -59,7 +64,7 @@ typedef struct {
 typedef struct {
     uint8_t address[ADDRESS_SIZE];  // ключ
     int index;                      // индекс в account_pool
-    int is_occupied;                // 0 = пусто, 1 = занято
+    int is_occupied;                // 0 = пусто, 1 = занято, 2 = удалено
 } AccountIndexEntry;
 
 // Enclave initialization

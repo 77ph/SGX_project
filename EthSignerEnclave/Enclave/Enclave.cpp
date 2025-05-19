@@ -127,46 +127,69 @@ static uint32_t address_hash(const uint8_t* address) {
     for (int i = 0; i < ADDRESS_SIZE; i++) {
         hash = ((hash << 5) + hash) + address[i];  // hash * 33 + address[i]
     }
+    LOG_DEBUG_MACRO("Address hash: %u (for address: ", hash);
+    for (int i = 0; i < ADDRESS_SIZE; i++) {
+        LOG_DEBUG_MACRO("%02x", address[i]);
+    }
+    LOG_DEBUG_MACRO(")\n");
     return hash % INDEX_TABLE_CAPACITY;
 }
 
 bool account_index_insert(const uint8_t* address, int index) {
     uint32_t hash = address_hash(address);
+    LOG_DEBUG_MACRO("Starting account_index_insert: hash=%u, index=%d\n", hash, index);
+    
     for (int i = 0; i < INDEX_TABLE_CAPACITY; i++) {
         uint32_t pos = (hash + i) % INDEX_TABLE_CAPACITY;
-        if (!account_index_table[pos].is_occupied) {
+        LOG_DEBUG_MACRO("Trying position %u: is_occupied=%d\n", pos, account_index_table[pos].is_occupied);
+        
+        if (account_index_table[pos].is_occupied == SLOT_EMPTY || 
+            account_index_table[pos].is_occupied == SLOT_DELETED) {
+            LOG_DEBUG_MACRO("Found suitable slot at position %u\n", pos);
             memcpy(account_index_table[pos].address, address, ADDRESS_SIZE);
             account_index_table[pos].index = index;
-            account_index_table[pos].is_occupied = 1;
+            account_index_table[pos].is_occupied = SLOT_OCCUPIED;
+            LOG_DEBUG_MACRO("Successfully inserted at position %u\n", pos);
             return true;
         }
     }
-    return false; // таблица переполнена
+    LOG_ERROR_MACRO("Failed to find suitable slot in hash table\n");
+    return false;
 }
 
-int account_index_lookup(const uint8_t* address) {
+bool account_index_find(const uint8_t* address, int* out_index) {
     uint32_t hash = address_hash(address);
+    LOG_DEBUG_MACRO("Starting account_index_find: hash=%u\n", hash);
+    
     for (int i = 0; i < INDEX_TABLE_CAPACITY; i++) {
         uint32_t pos = (hash + i) % INDEX_TABLE_CAPACITY;
-        if (!account_index_table[pos].is_occupied) {
-            return -1; // не найдено
+        LOG_DEBUG_MACRO("Checking position %u: is_occupied=%d\n", pos, account_index_table[pos].is_occupied);
+        
+        if (account_index_table[pos].is_occupied == SLOT_EMPTY) {
+            LOG_DEBUG_MACRO("Found empty slot at position %u, stopping search\n", pos);
+            return false;
         }
-        if (memcmp(account_index_table[pos].address, address, ADDRESS_SIZE) == 0) {
-            return account_index_table[pos].index;
+        if (account_index_table[pos].is_occupied == SLOT_OCCUPIED && 
+            memcmp(account_index_table[pos].address, address, ADDRESS_SIZE) == 0) {
+            LOG_DEBUG_MACRO("Found matching address at position %u, index=%d\n", pos, account_index_table[pos].index);
+            *out_index = account_index_table[pos].index;
+            return true;
         }
     }
-    return -1;
+    LOG_DEBUG_MACRO("Searched entire table, no match found\n");
+    return false;
 }
 
 bool account_index_remove(const uint8_t* address) {
     uint32_t hash = address_hash(address);
     for (int i = 0; i < INDEX_TABLE_CAPACITY; i++) {
         uint32_t pos = (hash + i) % INDEX_TABLE_CAPACITY;
-        if (!account_index_table[pos].is_occupied) {
+        if (account_index_table[pos].is_occupied == SLOT_EMPTY) {
             return false;
         }
-        if (memcmp(account_index_table[pos].address, address, ADDRESS_SIZE) == 0) {
-            account_index_table[pos].is_occupied = 0;
+        if (account_index_table[pos].is_occupied == SLOT_OCCUPIED && 
+            memcmp(account_index_table[pos].address, address, ADDRESS_SIZE) == 0) {
+            account_index_table[pos].is_occupied = SLOT_DELETED;
             return true;
         }
     }
@@ -175,7 +198,7 @@ bool account_index_remove(const uint8_t* address) {
 
 void account_index_clear() {
     for (int i = 0; i < INDEX_TABLE_CAPACITY; i++) {
-        account_index_table[i].is_occupied = 0;
+        account_index_table[i].is_occupied = SLOT_EMPTY;
     }
 }
 
@@ -561,34 +584,25 @@ static int load_account(const char* account_id, Account* account) {
 }
 
 // Helper function to find account in pool by address
-static int find_account_in_pool(const uint8_t* address) {
-    if (!address) {
-        return -1;
-    }
-
+static int find_account_in_pool(const uint8_t* address, int* out_index) {
+    LOG_DEBUG_MACRO("Starting find_account_in_pool\n");
+    
     // Сначала ищем в хеш-таблице
-    int index = account_index_lookup(address);
-    if (index >= 0) {
+    int index;
+    if (account_index_find(address, &index)) {
+        LOG_DEBUG_MACRO("Found in hash table at index %d\n", index);
         // Проверяем, что аккаунт действительно инициализирован
-        if (account_pool.accounts[index].account.is_initialized &&
-            memcmp(account_pool.accounts[index].account.address, address, 20) == 0) {
-            LOG_DEBUG_MACRO("Found account at pool index %d (via hash table)\n", index);
+        if (index >= 0 && index < MAX_POOL_SIZE && account_pool.accounts[index].account.is_initialized) {
+            LOG_DEBUG_MACRO("Account is initialized, returning index %d\n", index);
+            if (out_index) {
+                *out_index = index;
+            }
             return index;
         }
+        LOG_DEBUG_MACRO("Account found but not initialized or invalid index\n");
+    } else {
+        LOG_DEBUG_MACRO("Account not found in hash table\n");
     }
-
-    // Fallback на старый метод поиска
-    for (int i = 0; i < MAX_POOL_SIZE; i++) {
-        if (account_pool.accounts[i].account.is_initialized &&
-            memcmp(account_pool.accounts[i].account.address, address, 20) == 0) {
-            LOG_DEBUG_MACRO("Found account at pool index %d (via linear search)\n", i);
-            // Добавляем найденный аккаунт в хеш-таблицу
-            account_index_insert(address, i);
-            return i;
-        }
-    }
-
-    LOG_DEBUG_MACRO("Account not found in pool\n");
     return -1;
 }
 
@@ -620,7 +634,7 @@ static int test_find_account_in_pool(test_suite_t* suite) {
         account_pool.accounts[i].account.is_initialized = false;
     }
     uint8_t address_bytes[20] = {0};  // Просто нулевой адрес
-    int result = find_account_in_pool(address_bytes);
+    int result = find_account_in_pool(address_bytes, NULL);
     print_test_result("Empty pool", result == -1, "Expected -1 for empty pool");
     
     // Test 2: Add test account to pool
@@ -637,7 +651,7 @@ static int test_find_account_in_pool(test_suite_t* suite) {
     account_pool.accounts[0].account.is_initialized = true;  // Явно устанавливаем
     
     // Test 3: Find existing account
-    result = find_account_in_pool(test_account.address);
+    result = find_account_in_pool(test_account.address, NULL);
     print_test_result("Valid account lookup", result == 0, "Security check passed: valid account found");
     
     // Cleanup
@@ -744,7 +758,7 @@ static int test_unload_account_from_pool(test_suite_t* suite) {
     }
 
     // Verify account was unloaded
-    if (find_account_in_pool((const uint8_t*)account_id) != -1) {
+    if (find_account_in_pool(test_account.address, NULL) != -1) {
         LOG_ERROR_MACRO("Account still found in pool after unload\n");
         return -1;
     }
@@ -898,6 +912,7 @@ static int test_sign_with_pool_account(test_suite_t* suite) {
     
     // Cleanup
     secure_memzero(&account_pool.accounts[pool_index].account, sizeof(Account));
+    account_pool.accounts[pool_index].account.use_count = 0;
     account_pool.accounts[pool_index].account.is_initialized = false;
     
     return 0;
@@ -978,6 +993,7 @@ static int test_get_pool_status(test_suite_t* suite) {
 
     // Cleanup
     secure_memzero(&account_pool.accounts[pool_index].account, sizeof(Account));
+    account_pool.accounts[pool_index].account.use_count = 0;
     account_pool.accounts[pool_index].account.is_initialized = false;
     
     return 0;
@@ -1081,13 +1097,21 @@ static int test_keccak_address_generation(test_suite_t* suite) {
 static int test_pool_capacity_and_hash_table(test_suite_t* suite) {
     LOG_INFO_MACRO("Testing pool capacity and hash table functionality...\n");
     
+    // Clear pool and hash table before testing
+    for (int i = 0; i < MAX_POOL_SIZE; i++) {
+        secure_memzero(&account_pool.accounts[i].account, sizeof(Account));
+        account_pool.accounts[i].account.is_initialized = false;
+    }
+    account_index_clear();
+    LOG_INFO_MACRO("Pool and hash table cleared\n");
+    
     // Array to store generated account addresses
     char account_addresses[MAX_POOL_SIZE][43]; // 0x + 40 hex chars + null terminator
     int generated_count = 0;
     
-    // Save current log level and set to ERROR only
+    // Save current log level and set to DEBUG to see hash table operations
     int old_log_level = g_log_level;
-    g_log_level = LOG_ERROR;
+    g_log_level = LOG_DEBUG;
     
     // Generate accounts until pool is full
     while (generated_count < MAX_POOL_SIZE) {
@@ -1095,10 +1119,11 @@ static int test_pool_capacity_and_hash_table(test_suite_t* suite) {
         int result = ecall_generate_account_to_pool(address);
         if (result < 0) {
             LOG_ERROR_MACRO("Failed to generate account %d\n", generated_count);
-            g_log_level = old_log_level; // Restore log level before returning
+            g_log_level = old_log_level;
             return -1;
         }
-        
+        LOG_INFO_MACRO("Generated account %d at index %d\n", generated_count, result);
+
         // Store address
         strncpy(account_addresses[generated_count], address, 42);
         account_addresses[generated_count][42] = '\0';
@@ -1110,7 +1135,7 @@ static int test_pool_capacity_and_hash_table(test_suite_t* suite) {
     int result = ecall_generate_account_to_pool(extra_address);
     if (result >= 0) {
         LOG_ERROR_MACRO("Pool should be full but generated extra account\n");
-        g_log_level = old_log_level; // Restore log level before returning
+        g_log_level = old_log_level;
         return -1;
     }
     LOG_INFO_MACRO("Successfully verified pool is full\n");
@@ -1124,12 +1149,15 @@ static int test_pool_capacity_and_hash_table(test_suite_t* suite) {
             address_bytes[j] = (uint8_t)strtol(byte_str, NULL, 16);
         }
         
-        int pool_index = find_account_in_pool(address_bytes);
-        if (pool_index < 0) {
+        LOG_DEBUG_MACRO("\nTrying to find account %s in pool...\n", account_addresses[i]);
+        int pool_index;
+        bool found = find_account_in_pool(address_bytes, &pool_index) >= 0;
+        if (!found) {
             LOG_ERROR_MACRO("Failed to find account %s in pool\n", account_addresses[i]);
-            g_log_level = old_log_level; // Restore log level before returning
+            g_log_level = old_log_level;
             return -1;
         }
+        LOG_DEBUG_MACRO("Successfully found account at index %d\n", pool_index);
     }
     
     // Unload all accounts
@@ -1137,7 +1165,7 @@ static int test_pool_capacity_and_hash_table(test_suite_t* suite) {
         result = ecall_unload_account_from_pool(account_addresses[i]);
         if (result != 0) {
             LOG_ERROR_MACRO("Failed to unload account %s\n", account_addresses[i]);
-            g_log_level = old_log_level; // Restore log level before returning
+            g_log_level = old_log_level;
             return -1;
         }
     }
@@ -1311,7 +1339,7 @@ int ecall_load_account_to_pool(const char* account_id) {
     }
 
     // Check if account is already in pool
-    int existing_index = find_account_in_pool(address);
+    int existing_index = find_account_in_pool(address, NULL);
     if (existing_index != -1) {
         LOG_ERROR_MACRO("Account already in pool at index %d\n", existing_index);
         return -1;
@@ -1373,8 +1401,8 @@ int ecall_unload_account_from_pool(const char* account_id) {
     }
 
     // Find account in pool
-    int pool_index = find_account_in_pool(address);
-    if (pool_index == -1) {
+    int pool_index;
+    if (find_account_in_pool(address, &pool_index) < 0) {
         LOG_WARN_MACRO("WARNING: Account not found in pool\n");
         return -1;
     }
@@ -1388,10 +1416,11 @@ int ecall_unload_account_from_pool(const char* account_id) {
     // Securely clear the slot
     secure_memzero(&account_pool.accounts[pool_index].account, sizeof(Account));
     account_pool.accounts[pool_index].account.use_count = 0;
+    account_pool.accounts[pool_index].account.is_initialized = false;
     LOG_DEBUG_MACRO("Account slot cleared at index %d\n", pool_index);
 
     // Verify account was removed
-    if (find_account_in_pool(address) != -1) {
+    if (find_account_in_pool(address, NULL) >= 0) {
         LOG_ERROR_MACRO("Failed to verify account removal\n");
         return -1;
     }
@@ -1421,7 +1450,7 @@ int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message,
     }
 
     // Find account in pool
-    int pool_index = find_account_in_pool(address);
+    int pool_index = find_account_in_pool(address, NULL);
     if (pool_index == -1) {
         LOG_ERROR_MACRO("Account not found in pool\n");
         return -1;
@@ -1553,6 +1582,13 @@ int ecall_generate_account_to_pool(char* account_address) {
     }
     LOG_INFO_MACRO("Found free slot at index %d\n", free_slot);
 
+    // Print address bytes for debugging
+    LOG_DEBUG_MACRO("Inserting account with address bytes: ");
+    for (int i = 0; i < 20; i++) {
+        LOG_DEBUG_MACRO("%02x", new_account.address[i]);
+    }
+    LOG_DEBUG_MACRO("\n");
+
     if (!account_index_insert(new_account.address, free_slot)) {
         LOG_ERROR_MACRO("Failed to insert into account index table\n");
         return -1;
@@ -1563,6 +1599,16 @@ int ecall_generate_account_to_pool(char* account_address) {
     account_pool.accounts[free_slot].account.use_count = 0;
     account_pool.accounts[free_slot].account.is_initialized = true;
     LOG_INFO_MACRO("Account copied to pool at index %d\n", free_slot);
+
+    // Verify the account was inserted correctly
+    int verify_index;
+    bool found = find_account_in_pool(new_account.address, &verify_index) >= 0;
+    if (!found || verify_index != free_slot) {
+        LOG_ERROR_MACRO("Account verification failed: expected index %d, got %d (found=%d)\n", 
+                       free_slot, verify_index, found);
+        return -1;
+    }
+    LOG_INFO_MACRO("Account verification successful\n");
 
     LOG_INFO_MACRO("Account successfully generated in pool at index %d\n", free_slot);
     return free_slot;
