@@ -8,6 +8,7 @@
 #include "Enclave.h"
 #include "secp256k1.h"
 #include "secp256k1_ecdh.h"
+#include "secp256k1_recovery.h"
 #include <stdarg.h>
 #include <time.h>
 #include <math.h>  // Добавляем для log2
