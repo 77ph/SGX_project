@@ -174,6 +174,14 @@ void account_index_clear() {
     }
 }
 
+// Utility function to convert hex address string to bytes
+void hex_address_to_bytes(const char* hex_address, uint8_t* address_bytes) {
+    for (int i = 0; i < 20; i++) {
+        char byte_str[3] = {hex_address[2 + i*2], hex_address[2 + i*2 + 1], 0};
+        address_bytes[i] = (uint8_t)strtol(byte_str, NULL, 16);
+    }
+}
+
 // Helper function to calculate Shannon entropy
 double calculate_entropy(const uint8_t* data, size_t size) {
     if (!data || size == 0) return 0.0;
@@ -1228,11 +1236,8 @@ int ecall_load_account_to_pool(const char* account_id) {
 
     // Convert hex string to bytes
     uint8_t address[20];
-    for (int i = 0; i < 20; i++) {
-        char byte_str[3] = {account_id[2 + i*2], account_id[2 + i*2 + 1], 0};
-        address[i] = (uint8_t)strtol(byte_str, NULL, 16);
-    }
-
+    hex_address_to_bytes(account_id, address);
+    
     // Check if account is already in pool
     int existing_index = find_account_in_pool(address, NULL);
     if (existing_index != -1) {
@@ -1290,10 +1295,7 @@ int ecall_unload_account_from_pool(const char* account_id) {
         return -1;
     }
     
-    for (int i = 0; i < 20; i++) {
-        char byte_str[3] = {account_id[2 + i*2], account_id[2 + i*2 + 1], 0};
-        address[i] = (uint8_t)strtol(byte_str, NULL, 16);
-    }
+    hex_address_to_bytes(account_id, address);
 
     // Find account in pool
     int pool_index;
@@ -1339,10 +1341,7 @@ int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message,
         return -1;
     }
 
-    for (int i = 0; i < 20; i++) {
-        char byte_str[3] = {account_id[2 + i*2], account_id[2 + i*2 + 1], 0};
-        address[i] = (uint8_t)strtol(byte_str, NULL, 16);
-    }
+    hex_address_to_bytes(account_id, address);
 
     // Find account in pool
     int pool_index = find_account_in_pool(address, NULL);
