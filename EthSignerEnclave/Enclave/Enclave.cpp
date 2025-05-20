@@ -161,6 +161,8 @@ bool account_index_remove(const uint8_t* address) {
         }
         if (account_index_table[pos].is_occupied == SLOT_OCCUPIED && 
             memcmp(account_index_table[pos].address, address, ADDRESS_SIZE) == 0) {
+            // TODO: Consider implementing rehashing if performance degrades due to too many SLOT_DELETED entries
+            // This would involve moving entries to fill gaps and reduce search time
             account_index_table[pos].is_occupied = SLOT_DELETED;
             return true;
         }
