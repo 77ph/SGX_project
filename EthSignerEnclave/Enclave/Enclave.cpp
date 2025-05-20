@@ -766,7 +766,7 @@ static int test_sign_with_pool_account(test_suite_t* suite) {
     
     // Test 1: Sign with null account_id
     uint8_t test_message[32] = {0};
-    uint8_t test_signature[64] = {0};
+    uint8_t test_signature[65] = {0};
     int result = ecall_sign_with_pool_account(NULL, test_message, sizeof(test_message), test_signature, sizeof(test_signature));
     print_test_result("Sign with null account_id", result == -1, "Expected -1 for null account_id");
     
@@ -831,8 +831,15 @@ static int test_sign_with_pool_account(test_suite_t* suite) {
     }
     
     // Parse signature
-    secp256k1_ecdsa_signature sig;
-    if (!secp256k1_ecdsa_signature_parse_compact(ctx, &sig, test_signature)) {
+    secp256k1_ecdsa_recoverable_signature sig;
+    uint8_t v = test_signature[64];  // получаем v из подписи
+    if (v != 27 && v != 28) {
+        print_test_result("Parse signature", 0, "Invalid v value in signature");
+        secp256k1_context_destroy(ctx);
+        return -1;
+    }
+    int recid = v - 27;  // преобразуем v обратно в recid (0 или 1)
+    if (!secp256k1_ecdsa_recoverable_signature_parse_compact(ctx, &sig, test_signature, recid)) {
         print_test_result("Parse signature", 0, "Failed to parse signature");
         secp256k1_context_destroy(ctx);
         return -1;
@@ -846,8 +853,12 @@ static int test_sign_with_pool_account(test_suite_t* suite) {
         return -1;
     }
 
+    // Convert recoverable signature to normal signature
+    secp256k1_ecdsa_signature normal_sig;
+    secp256k1_ecdsa_recoverable_signature_convert(ctx, &normal_sig, &sig);
+
     // Verify signature
-    if (!secp256k1_ecdsa_verify(ctx, &sig, test_message, &pubkey)) {
+    if (!secp256k1_ecdsa_verify(ctx, &normal_sig, test_message, &pubkey)) {
         print_test_result("Verify signature", 0, "Signature verification failed");
         secp256k1_context_destroy(ctx);
         return -1;
@@ -919,7 +930,7 @@ static int test_get_pool_status(test_suite_t* suite) {
 
     // Test 3: Sign a message to make account active
     uint8_t test_message[32] = {0};
-    uint8_t test_signature[64] = {0};
+    uint8_t test_signature[65] = {0};
     for (int i = 0; i < sizeof(test_message); i++) {
         test_message[i] = i;
     }
@@ -1332,7 +1343,7 @@ int ecall_unload_account_from_pool(const char* account_id) {
 int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message, size_t message_len, uint8_t* signature, size_t signature_len) {
     LOG_DEBUG_MACRO("Signing message with pool account %s...\n", account_id);
     
-    if (!account_id || !message || !signature || message_len == 0 || signature_len < 64) {
+    if (!account_id || !message || !signature || message_len == 0 || signature_len < 65) {  // Changed from 64 to 65 to accommodate v
         LOG_ERROR_MACRO("Invalid parameters\n");
         return -1;
     }
@@ -1361,23 +1372,33 @@ int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message,
         return -1;
     }
 
-    // Create signature
-    // Note: secp256k1_ecdsa_sign uses RFC6979 by default when noncefp and ndata are NULL
-    // This provides deterministic signatures (same input = same signature) and is secure
-    // as per RFC6979 specification
-    secp256k1_ecdsa_signature sig;
-    if (!secp256k1_ecdsa_sign(ctx, &sig, message, account_pool.accounts[pool_index].account.private_key, NULL, NULL)) {
-        LOG_ERROR_MACRO("Failed to create signature\n");
+    // Create recoverable signature
+    secp256k1_ecdsa_recoverable_signature sig;
+    if (!secp256k1_ecdsa_sign_recoverable(ctx, &sig, message, account_pool.accounts[pool_index].account.private_key, NULL, NULL)) {
+        LOG_ERROR_MACRO("Failed to create recoverable signature\n");
         secp256k1_context_destroy(ctx);
         return -1;
     }
 
-    // Serialize signature
-    if (!secp256k1_ecdsa_signature_serialize_compact(ctx, signature, &sig)) {
-        LOG_ERROR_MACRO("Failed to serialize signature\n");
+    // Serialize signature and get recovery id (v)
+    int recid;
+    if (!secp256k1_ecdsa_recoverable_signature_serialize_compact(ctx, signature, &recid, &sig)) {
+        LOG_ERROR_MACRO("Failed to serialize recoverable signature\n");
         secp256k1_context_destroy(ctx);
         return -1;
     }
+
+    // Add recovery id (v) to the end of signature following Ethereum standard
+    uint8_t v = (uint8_t)(27 + recid);  // v = 27 + recid (0 or 1) -> 27 or 28
+    
+    // Validate v value
+    if (v != 27 && v != 28) {
+        LOG_ERROR_MACRO("Critical error: Invalid v value %d (must be 27 or 28)\n", v);
+        secp256k1_context_destroy(ctx);
+        return -1;
+    }
+    
+    signature[64] = v;
 
     // Increment use count in Account
     account_pool.accounts[pool_index].account.use_count++;

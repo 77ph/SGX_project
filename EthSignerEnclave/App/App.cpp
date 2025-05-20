@@ -318,7 +318,7 @@ int main(int argc, char *argv[]) {
                 tx_hash_bytes[i] = (uint8_t)strtol(byte_str, NULL, 16);
             }
 
-            uint8_t signature[64];
+            uint8_t signature[65];
             status = ecall_sign_with_pool_account(global_eid, &retval, arg, tx_hash_bytes, sizeof(tx_hash_bytes), signature, sizeof(signature));
             if (status != SGX_SUCCESS || retval != 0) {
                 printf("Error: Failed to sign with pool account\n");
@@ -327,7 +327,7 @@ int main(int argc, char *argv[]) {
 
             // Print signature in hex
             printf("Signature: ");
-            for (int i = 0; i < 64; i++) {
+            for (int i = 0; i < 65; i++) {
                 printf("%02x", signature[i]);
             }
             printf("\n");
