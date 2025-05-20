@@ -76,18 +76,6 @@ static char* my_strcat(char* dest, const char* src) {
     return dest;
 }
 
-/* Unused
-int printf(const char* fmt, ...) {
-    char buf[ENCLAVE_BUFSIZ] = { '\0' };
-    va_list ap;
-    va_start(ap, fmt);
-    vsnprintf(buf, ENCLAVE_BUFSIZ, fmt, ap);
-    va_end(ap);
-    ocall_print(buf);
-    return 0;
-}
-*/
-
 // Logging function
 static void log_message(int level, const char* format, ...) {
     if (level > g_log_level) return;
@@ -127,56 +115,40 @@ static uint32_t address_hash(const uint8_t* address) {
     for (int i = 0; i < ADDRESS_SIZE; i++) {
         hash = ((hash << 5) + hash) + address[i];  // hash * 33 + address[i]
     }
-    LOG_DEBUG_MACRO("Address hash: %u (for address: ", hash);
-    for (int i = 0; i < ADDRESS_SIZE; i++) {
-        LOG_DEBUG_MACRO("%02x", address[i]);
-    }
-    LOG_DEBUG_MACRO(")\n");
     return hash % INDEX_TABLE_CAPACITY;
 }
 
 bool account_index_insert(const uint8_t* address, int index) {
     uint32_t hash = address_hash(address);
-    LOG_DEBUG_MACRO("Starting account_index_insert: hash=%u, index=%d\n", hash, index);
     
     for (int i = 0; i < INDEX_TABLE_CAPACITY; i++) {
         uint32_t pos = (hash + i) % INDEX_TABLE_CAPACITY;
-        LOG_DEBUG_MACRO("Trying position %u: is_occupied=%d\n", pos, account_index_table[pos].is_occupied);
         
         if (account_index_table[pos].is_occupied == SLOT_EMPTY || 
             account_index_table[pos].is_occupied == SLOT_DELETED) {
-            LOG_DEBUG_MACRO("Found suitable slot at position %u\n", pos);
             memcpy(account_index_table[pos].address, address, ADDRESS_SIZE);
             account_index_table[pos].index = index;
             account_index_table[pos].is_occupied = SLOT_OCCUPIED;
-            LOG_DEBUG_MACRO("Successfully inserted at position %u\n", pos);
             return true;
         }
     }
-    LOG_ERROR_MACRO("Failed to find suitable slot in hash table\n");
     return false;
 }
 
 bool account_index_find(const uint8_t* address, int* out_index) {
     uint32_t hash = address_hash(address);
-    LOG_DEBUG_MACRO("Starting account_index_find: hash=%u\n", hash);
     
     for (int i = 0; i < INDEX_TABLE_CAPACITY; i++) {
         uint32_t pos = (hash + i) % INDEX_TABLE_CAPACITY;
-        LOG_DEBUG_MACRO("Checking position %u: is_occupied=%d\n", pos, account_index_table[pos].is_occupied);
-        
         if (account_index_table[pos].is_occupied == SLOT_EMPTY) {
-            LOG_DEBUG_MACRO("Found empty slot at position %u, stopping search\n", pos);
             return false;
         }
         if (account_index_table[pos].is_occupied == SLOT_OCCUPIED && 
             memcmp(account_index_table[pos].address, address, ADDRESS_SIZE) == 0) {
-            LOG_DEBUG_MACRO("Found matching address at position %u, index=%d\n", pos, account_index_table[pos].index);
             *out_index = account_index_table[pos].index;
             return true;
         }
     }
-    LOG_DEBUG_MACRO("Searched entire table, no match found\n");
     return false;
 }
 
@@ -273,8 +245,6 @@ sgx_status_t generate_entropy(uint8_t* entropy, size_t size) {
 
 // Enhanced key generation with security checks
 sgx_status_t generate_secure_private_key(uint8_t* private_key, size_t size) {
-    LOG_INFO_MACRO("Starting secure private key generation...\n");
-    
     if (!private_key || size != 32) {
         LOG_ERROR_MACRO("Invalid parameters: private_key=%p, size=%zu\n", private_key, size);
         return SGX_ERROR_INVALID_PARAMETER;
@@ -287,7 +257,6 @@ sgx_status_t generate_secure_private_key(uint8_t* private_key, size_t size) {
         LOG_ERROR_MACRO("Failed to generate entropy: %d\n", status);
         return status;
     }
-    LOG_DEBUG_MACRO("Generated entropy of size %zu bytes\n", sizeof(entropy));
     
     // Step 2: Extract PRK using SHA-256 (HKDF-Extract)
     sgx_sha256_hash_t prk;
@@ -296,7 +265,6 @@ sgx_status_t generate_secure_private_key(uint8_t* private_key, size_t size) {
         LOG_ERROR_MACRO("Failed to extract PRK: %d\n", status);
         return status;
     }
-    LOG_DEBUG_MACRO("PRK extracted, size: %zu bytes\n", sizeof(prk));
     
     // Step 3: Expand PRK with info string (HKDF-Expand)
     const char* info = "keygen";
@@ -315,14 +283,12 @@ sgx_status_t generate_secure_private_key(uint8_t* private_key, size_t size) {
         LOG_ERROR_MACRO("Failed to expand key: %d\n", status);
         return status;
     }
-    LOG_DEBUG_MACRO("Key expanded, final size: %zu bytes\n", sizeof(final_hash));
     
     // Copy the final hash to the private key
     memcpy(private_key, final_hash, 32);
     
     // Verify key strength
     if (is_strong_private_key(private_key, size)) {
-        LOG_INFO_MACRO("Private key generated successfully\n");
         return SGX_SUCCESS;
     }
     
@@ -341,8 +307,6 @@ void keccak_256(const uint8_t* input, size_t input_len, uint8_t* output) {
 
 // Internal function to generate account
 static int generate_account(Account* account) {
-    LOG_INFO_MACRO("Starting account generation...\n");
-    
     if (!account) {
         LOG_ERROR_MACRO("Invalid account parameter\n");
         return -1;
@@ -370,7 +334,6 @@ static int generate_account(Account* account) {
         secp256k1_context_destroy(ctx);
         return -1;
     }
-    LOG_DEBUG_MACRO("Public key created\n");
 
     // Serialize public key
     uint8_t serialized_pubkey[65];
@@ -387,7 +350,6 @@ static int generate_account(Account* account) {
     keccak_256(serialized_pubkey + 1, 64, hash);
     uint8_t address[20];
     memcpy(address, hash + 12, 20);
-    LOG_DEBUG_MACRO("Ethereum address calculated\n");
     
     // Store the account data
     memcpy(account->private_key, private_key, sizeof(private_key));
@@ -407,14 +369,11 @@ static int generate_account(Account* account) {
     LOG_DEBUG_MACRO("HMAC calculated\n");
 
     secp256k1_context_destroy(ctx);
-    LOG_INFO_MACRO("Account generation completed successfully\n");
     return 0;
 }
 
 // Internal function to save account to pool
 static int save_account_to_pool(const char* account_id, const Account* account) {
-    LOG_INFO_MACRO("Saving account with ID: %s to pool\n", account_id);
-    
     if (!account || !account->is_initialized) {
         LOG_ERROR_MACRO("Account is not initialized\n");
         return -1;
@@ -423,7 +382,6 @@ static int save_account_to_pool(const char* account_id, const Account* account) 
     // Create structure for saving
     AccountFile data;
     memcpy(&data.account, account, sizeof(Account));
-    LOG_DEBUG_MACRO("Account data copied to save structure\n");
 
     // Calculate HMAC
     uint8_t computed_hash[32];
@@ -454,7 +412,6 @@ static int save_account_to_pool(const char* account_id, const Account* account) 
         free(sealed_data);
         return -1;
     }
-    LOG_DEBUG_MACRO("Data sealed successfully\n");
 
     // Save encrypted data using provided account_id as filename
     char filename[256];
@@ -469,14 +426,11 @@ static int save_account_to_pool(const char* account_id, const Account* account) 
         return -1;
     }
     
-    LOG_INFO_MACRO("Account saved successfully to %s\n", filename);
     return 0;
 }
 
 // Helper function to load account from file
 static int load_account(const char* account_id, Account* account) {
-    LOG_INFO_MACRO("Loading account with ID: %s\n", account_id);
-    
     if (!account_id || !account) {
         LOG_ERROR_MACRO("Invalid parameters: account_id=%p, account=%p\n", account_id, account);
         return -1;
@@ -497,7 +451,6 @@ static int load_account(const char* account_id, Account* account) {
         return -1;
     }
     file_size = ret;
-    LOG_DEBUG_MACRO("File size: %zu bytes\n", file_size);
 
     // Чтение зашифрованных данных
     sealed_data = (uint8_t*)malloc(file_size);
@@ -512,7 +465,6 @@ static int load_account(const char* account_id, Account* account) {
         free(sealed_data);
         return -1;
     }
-    LOG_DEBUG_MACRO("File read successfully\n");
 
     // Расшифровка данных
     uint32_t decrypted_size = sgx_get_encrypt_txt_len((sgx_sealed_data_t*)sealed_data);
@@ -564,44 +516,28 @@ static int load_account(const char* account_id, Account* account) {
         free(decrypted_data);
         return -1;
     }
-    LOG_DEBUG_MACRO("Account address verified\n");
 
     // Копирование данных аккаунта
     memcpy(account, &data->account, sizeof(Account));
     account->is_initialized = true;
-    LOG_DEBUG_MACRO("Account data copied successfully\n");
-
-    // Print first 8 bytes of private key for debugging
-    LOG_DEBUG_MACRO("First 8 bytes of loaded private key: ");
-    for (int i = 0; i < 8; i++) {
-        LOG_DEBUG_MACRO("%02x ", account->private_key[i]);
-    }
-    LOG_DEBUG_MACRO("\n");
 
     free(decrypted_data);
-    LOG_INFO_MACRO("Account loaded successfully\n");
     return 0;
 }
 
 // Helper function to find account in pool by address
 static int find_account_in_pool(const uint8_t* address, int* out_index) {
-    LOG_DEBUG_MACRO("Starting find_account_in_pool\n");
     
     // Сначала ищем в хеш-таблице
     int index;
     if (account_index_find(address, &index)) {
-        LOG_DEBUG_MACRO("Found in hash table at index %d\n", index);
         // Проверяем, что аккаунт действительно инициализирован
         if (index >= 0 && index < MAX_POOL_SIZE && account_pool.accounts[index].account.is_initialized) {
-            LOG_DEBUG_MACRO("Account is initialized, returning index %d\n", index);
             if (out_index) {
                 *out_index = index;
             }
             return index;
         }
-        LOG_DEBUG_MACRO("Account found but not initialized or invalid index\n");
-    } else {
-        LOG_DEBUG_MACRO("Account not found in hash table\n");
     }
     return -1;
 }
@@ -714,7 +650,7 @@ static int test_load_account_to_pool(test_suite_t* suite) {
 
 // Test function for ecall_unload_account_from_pool
 static int test_unload_account_from_pool(test_suite_t* suite) {
-    LOG_INFO_MACRO("\nTesting ecall_unload_account_from_pool...\n");
+    LOG_INFO_MACRO("[TEST] Testing ecall_unload_account_from_pool...\n");
     
     // Test 1: Unload with null account_id
     int result = ecall_unload_account_from_pool(NULL);
@@ -722,10 +658,10 @@ static int test_unload_account_from_pool(test_suite_t* suite) {
     
     // Test 2: Unload non-existent account
     result = ecall_unload_account_from_pool("0x0000000000000000000000000000000000000000");
-    LOG_INFO_MACRO("Test 2 (unload non-existent): result = %d (expected -1)\n", result);
+    LOG_INFO_MACRO("[TEST] Test 2 (unload non-existent): result = %d (expected -1)\n", result);
     
     // Test 3: Generate, load and unload test account
-    LOG_INFO_MACRO("\nTest 3: Generate, load and unload test account...\n");
+    LOG_INFO_MACRO("[TEST] Test 3: Generate, load and unload test account...\n");
     Account test_account = {0};
     if (generate_account(&test_account) != 0) {
         LOG_ERROR_MACRO("Failed to generate test account\n");
@@ -762,13 +698,12 @@ static int test_unload_account_from_pool(test_suite_t* suite) {
         LOG_ERROR_MACRO("Account still found in pool after unload\n");
         return -1;
     }
-    
-    LOG_INFO_MACRO("\nTest cleanup completed\n");
+
     return 0;
 }
 
 static int test_generate_account_in_pool(test_suite_t* suite) {
-    LOG_INFO_MACRO("\nTesting account generation and pool loading...\n");
+    LOG_INFO_MACRO("[TEST] Testing account generation and pool loading...\n");
     
     // Test 1: Generate account
     Account test_account = {0};
@@ -776,7 +711,7 @@ static int test_generate_account_in_pool(test_suite_t* suite) {
         print_test_result("Generate account", 0, "Failed to generate account");
         return -1;
     }
-    print_test_result("Generate account", 1, NULL);
+    print_test_result("[TEST] Generate account", 1, NULL);
 
     // Create account_id from address
     char account_id[43] = "0x";
@@ -796,7 +731,7 @@ static int test_generate_account_in_pool(test_suite_t* suite) {
         print_test_result("Load to pool", 0, "Failed to load account to pool");
         return -1;
     }
-    print_test_result("Load to pool", 1, NULL);
+    print_test_result("[TEST] Load to pool", 1, NULL);
 
     // Test 3: Verify account was added to pool
     if (!account_pool.accounts[pool_index].account.is_initialized) {
@@ -816,7 +751,7 @@ static int test_generate_account_in_pool(test_suite_t* suite) {
 }
 
 static int test_sign_with_pool_account(test_suite_t* suite) {
-    LOG_INFO_MACRO("\nTesting sign_with_pool_account...\n");
+    LOG_INFO_MACRO("[TEST] Testing sign_with_pool_account...\n");
     
     // Test 1: Sign with null account_id
     uint8_t test_message[32] = {0};
@@ -825,7 +760,7 @@ static int test_sign_with_pool_account(test_suite_t* suite) {
     print_test_result("Sign with null account_id", result == -1, "Expected -1 for null account_id");
     
     // Test 2: Generate, load and sign with test account
-    LOG_INFO_MACRO("\nGenerating test account...\n");
+    LOG_INFO_MACRO("[TEST] Generating test account...\n");
     Account test_account = {0};
     if (generate_account(&test_account) != 0) {
         print_test_result("Generate test account", 0, "Failed to generate test account");
@@ -919,14 +854,14 @@ static int test_sign_with_pool_account(test_suite_t* suite) {
 }
 
 static int test_get_pool_status(test_suite_t* suite) {
-    LOG_INFO_MACRO("\nTesting get_pool_status...\n");
+    LOG_INFO_MACRO("[TEST] Testing get_pool_status...\n");
     
     // Clear pool before testing
     for (int i = 0; i < MAX_POOL_SIZE; i++) {
         secure_memzero(&account_pool.accounts[i].account, sizeof(Account));
         account_pool.accounts[i].account.is_initialized = false;
     }
-    LOG_INFO_MACRO("Pool cleared\n");
+    LOG_INFO_MACRO("[TEST] Pool cleared\n");
     
     // Test 1: Check empty pool
     uint32_t total_accounts = 0;
@@ -1001,7 +936,7 @@ static int test_get_pool_status(test_suite_t* suite) {
 
 // Test Keccak-256 address generation
 static int test_keccak_address_generation(test_suite_t* suite) {
-    const char* test_name = "Keccak-256 Address Generation";
+    const char* test_name = "[TEST] Keccak-256 Address Generation";
     LOG_INFO_MACRO("Running test: %s\n", test_name);
     
     // Predefined private key (32 bytes) - using the same key as in Python test
@@ -1039,36 +974,9 @@ static int test_keccak_address_generation(test_suite_t* suite) {
         return -1;
     }
 
-    // Debug output for public key
-    LOG_DEBUG_MACRO("Full public key (65 bytes):\n");
-    for (int i = 0; i < 65; i++) {
-        LOG_DEBUG_MACRO("%02x ", serialized_pubkey[i]);
-    }
-    LOG_DEBUG_MACRO("\n");
-
-    LOG_DEBUG_MACRO("Public key without prefix (64 bytes):\n");
-    for (int i = 1; i < 65; i++) {
-        LOG_DEBUG_MACRO("%02x ", serialized_pubkey[i]);
-    }
-    LOG_DEBUG_MACRO("\n");
-    
     // Calculate Ethereum address
     uint8_t hash[32];
     keccak_256(serialized_pubkey + 1, 64, hash);
-
-    // Debug output for hash
-    LOG_DEBUG_MACRO("Keccak-256 hash (32 bytes):\n");
-    for (int i = 0; i < 32; i++) {
-        LOG_DEBUG_MACRO("%02x ", hash[i]);
-    }
-    LOG_DEBUG_MACRO("\n");
-
-    // Debug output for address bytes (last 20 bytes of hash)
-    LOG_DEBUG_MACRO("Address bytes (last 20 bytes of hash):\n");
-    for (int i = 12; i < 32; i++) {
-        LOG_DEBUG_MACRO("%02x ", hash[i]);
-    }
-    LOG_DEBUG_MACRO("\n");
     
     // Convert to Ethereum address format
     char generated_address[43];
@@ -1099,7 +1007,7 @@ static int test_pool_capacity_and_hash_table(test_suite_t* suite) {
     int old_log_level = g_log_level;
     g_log_level = LOG_ERROR;
     
-    LOG_INFO_MACRO("Testing pool capacity and hash table functionality...\n");
+    LOG_INFO_MACRO("[TEST] Testing pool capacity and hash table functionality...\n");
     
     // Clear pool and hash table before testing
     for (int i = 0; i < MAX_POOL_SIZE; i++) {
@@ -1174,7 +1082,6 @@ static int test_pool_capacity_and_hash_table(test_suite_t* suite) {
     
     // Restore original log level before returning
     g_log_level = old_log_level;
-    LOG_INFO_MACRO("Pool capacity and hash table test passed\n");
     return 0;
 }
 
@@ -1570,12 +1477,6 @@ int ecall_generate_account_to_pool(char* account_address) {
     }
     LOG_INFO_MACRO("Found free slot at index %d\n", free_slot);
 
-    // Print address bytes for debugging
-    LOG_DEBUG_MACRO("Inserting account with address bytes: ");
-    for (int i = 0; i < 20; i++) {
-        LOG_DEBUG_MACRO("%02x", new_account.address[i]);
-    }
-    LOG_DEBUG_MACRO("\n");
 
     if (!account_index_insert(new_account.address, free_slot)) {
         LOG_ERROR_MACRO("Failed to insert into account index table\n");
@@ -1596,7 +1497,6 @@ int ecall_generate_account_to_pool(char* account_address) {
                        free_slot, verify_index, found);
         return -1;
     }
-    LOG_INFO_MACRO("Account verification successful\n");
 
     LOG_INFO_MACRO("Account successfully generated in pool at index %d\n", free_slot);
     return free_slot;
