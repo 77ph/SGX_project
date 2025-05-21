@@ -274,6 +274,7 @@ sgx_status_t generate_secure_private_key(uint8_t* private_key, size_t size) {
     status = sgx_sha256_msg(entropy, sizeof(entropy), &prk);
     if (status != SGX_SUCCESS) {
         LOG_ERROR_MACRO("Failed to extract PRK: %d\n", status);
+        secure_memzero(entropy, sizeof(entropy));  // Clear entropy before returning
         return status;
     }
     
@@ -292,6 +293,7 @@ sgx_status_t generate_secure_private_key(uint8_t* private_key, size_t size) {
     status = sgx_sha256_msg(expand_input, 32 + info_len + 1, &final_hash);
     if (status != SGX_SUCCESS) {
         LOG_ERROR_MACRO("Failed to expand key: %d\n", status);
+        secure_memzero(entropy, sizeof(entropy));  // Clear entropy before returning
         return status;
     }
     
@@ -300,10 +302,12 @@ sgx_status_t generate_secure_private_key(uint8_t* private_key, size_t size) {
     
     // Verify key strength
     if (is_strong_private_key(private_key, size)) {
+        secure_memzero(entropy, sizeof(entropy));  // Clear entropy after successful key generation
         return SGX_SUCCESS;
     }
     
     LOG_ERROR_MACRO("Generated key did not meet strength requirements\n");
+    secure_memzero(entropy, sizeof(entropy));  // Clear entropy before returning error
     return SGX_ERROR_UNEXPECTED;
 }
 
@@ -335,6 +339,7 @@ static int generate_account(Account* account) {
     secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
     if (!ctx) {
         LOG_ERROR_MACRO("Failed to create secp256k1 context\n");
+        secure_memzero(private_key, sizeof(private_key));  // Clear private key before returning
         return -1;
     }
     LOG_DEBUG_MACRO("Secp256k1 context created\n");
@@ -343,6 +348,7 @@ static int generate_account(Account* account) {
     if (!secp256k1_ec_pubkey_create(ctx, &pubkey, private_key)) {
         LOG_ERROR_MACRO("Failed to create public key\n");
         secp256k1_context_destroy(ctx);
+        secure_memzero(private_key, sizeof(private_key));  // Clear private key before returning
         return -1;
     }
 
@@ -352,6 +358,7 @@ static int generate_account(Account* account) {
     if (!secp256k1_ec_pubkey_serialize(ctx, serialized_pubkey, &serialized_pubkey_len, &pubkey, SECP256K1_EC_UNCOMPRESSED)) {
         LOG_ERROR_MACRO("Failed to serialize public key\n");
         secp256k1_context_destroy(ctx);
+        secure_memzero(private_key, sizeof(private_key));  // Clear private key before returning
         return -1;
     }
     LOG_DEBUG_MACRO("Public key serialized\n");
@@ -364,6 +371,7 @@ static int generate_account(Account* account) {
     
     // Store the account data
     memcpy(account->private_key, private_key, sizeof(private_key));
+    secure_memzero(private_key, sizeof(private_key));  // Clear private key after copying to account
     memcpy(account->public_key, serialized_pubkey, sizeof(serialized_pubkey));
     memcpy(account->address, address, sizeof(address));
     account->use_count = 0;
@@ -1414,6 +1422,9 @@ int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message,
     // 5. Invert recid if s was changed
     if (normalized) {
         recid ^= 1;  // flip recovery id
+        LOG_DEBUG_MACRO("Signature normalized: yes, recid adjusted to %d\n", recid);
+    } else {
+        LOG_DEBUG_MACRO("Signature normalized: no, recid remains %d\n", recid);
     }
 
     // 6. Serialize normalized signature
