@@ -48,3 +48,5 @@ linux-sgx/
 ../linux-sgx-driver/
 ../secp256k1/
 ../install_secp256k1.sh 
+
+docs/ 
