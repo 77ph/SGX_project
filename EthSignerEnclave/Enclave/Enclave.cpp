@@ -50,6 +50,14 @@ typedef struct {
     int passed_count;
 } test_suite_t;
 
+// Структура для recovery файла
+typedef struct {
+    uint8_t version;
+    uint8_t private_key[32];  // Зашифровано RSA
+    uint8_t public_key[65];   // Зашифровано RSA
+    uint8_t hmac[32];         // HMAC для верификации
+} recovery_file_t;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -177,12 +185,47 @@ void account_index_clear() {
     }
 }
 
-// Utility function to convert hex address string to bytes
-void hex_address_to_bytes(const char* hex_address, uint8_t* address_bytes) {
-    for (int i = 0; i < 20; i++) {
-        char byte_str[3] = {hex_address[2 + i*2], hex_address[2 + i*2 + 1], 0};
-        address_bytes[i] = (uint8_t)strtol(byte_str, NULL, 16);
+// Helper function to convert hex string to bytes
+static size_t hex_to_bytes(const char* hex_str, uint8_t* out_bytes, size_t max_out_len) {
+    if (!hex_str || !out_bytes || max_out_len == 0) {
+        return 0;
     }
+
+    size_t hex_len = strlen(hex_str);
+    if (hex_len < 2) {
+        LOG_ERROR_MACRO("Hex string too short\n");
+        return 0;
+    }
+
+    // Skip 0x prefix if present
+    const char* hex_start = hex_str;
+    if (hex_str[0] == '0' && hex_str[1] == 'x') {
+        hex_start += 2;
+        hex_len -= 2;
+    }
+
+    if (hex_len % 2 != 0) {
+        LOG_ERROR_MACRO("Invalid hex string length\n");
+        return 0;
+    }
+
+    size_t bytes_len = hex_len / 2;
+    if (bytes_len > max_out_len) {
+        LOG_ERROR_MACRO("Output buffer too small\n");
+        return 0;
+    }
+
+    for (size_t i = 0; i < bytes_len; i++) {
+        char byte_str[3] = {hex_start[i*2], hex_start[i*2+1], 0};
+        char* end;
+        out_bytes[i] = (uint8_t)strtol(byte_str, &end, 16);
+        if (*end != 0) {
+            LOG_ERROR_MACRO("Invalid hex character at position %zu\n", i*2);
+            return 0;
+        }
+    }
+
+    return bytes_len;
 }
 
 // Helper function to calculate Shannon entropy
@@ -1057,15 +1100,12 @@ static int test_pool_capacity_and_hash_table(test_suite_t* suite) {
     
     // Generate accounts until pool is full
     while (generated_count < MAX_POOL_SIZE) {
-        char address[43];
-        int result = ecall_generate_account_to_pool(address);
+        int result = ecall_generate_account_to_pool(account_addresses[generated_count]);
         if (result < 0) {
             LOG_ERROR_MACRO("Failed to generate account %d\n", generated_count);
             g_log_level = old_log_level; // Restore original log level
             return -1;
         }
-        strncpy(account_addresses[generated_count], address, 42);
-        account_addresses[generated_count][42] = '\0';
         generated_count++;
     }
     
@@ -1263,7 +1303,7 @@ int ecall_load_account_to_pool(const char* account_id) {
 
     // Convert hex string to bytes
     uint8_t address[20];
-    hex_address_to_bytes(account_id, address);
+    hex_to_bytes(account_id, address, sizeof(address));
     
     // Check if account is already in pool
     int existing_index = find_account_in_pool(address, NULL);
@@ -1322,7 +1362,7 @@ int ecall_unload_account_from_pool(const char* account_id) {
         return -1;
     }
     
-    hex_address_to_bytes(account_id, address);
+    hex_to_bytes(account_id, address, sizeof(address));
 
     // Find account in pool
     int pool_index;
@@ -1368,7 +1408,7 @@ int ecall_sign_with_pool_account(const char* account_id, const uint8_t* message,
         return -1;
     }
 
-    hex_address_to_bytes(account_id, address);
+    hex_to_bytes(account_id, address, sizeof(address));
 
     // Find account in pool
     int pool_index = find_account_in_pool(address, NULL);
@@ -1546,7 +1586,6 @@ int ecall_generate_account_to_pool(char* account_address) {
     }
     LOG_INFO_MACRO("Found free slot at index %d\n", free_slot);
 
-
     if (!account_index_insert(new_account.address, free_slot)) {
         LOG_ERROR_MACRO("Failed to insert into account index table\n");
         return -1;
@@ -1568,9 +1607,213 @@ int ecall_generate_account_to_pool(char* account_address) {
     }
 
     LOG_INFO_MACRO("Account successfully generated in pool at index %d\n", free_slot);
+
+    // Save account to disk
+    int ret = 0;
+    char filename[256];
+    snprintf(filename, sizeof(filename), "%s.account", account_address);
+    
+    // Save account using its address as filename
+    sgx_status_t status = ocall_save_to_file(&ret, (uint8_t*)&new_account, sizeof(Account), filename);
+    if (status != SGX_SUCCESS || ret != 0) {
+        LOG_ERROR_MACRO("Failed to save account file: status=%d, ret=%d\n", status, ret);
+        return -1;
+    }
+
     return free_slot;
 }
 
+// Функция для RSA шифрования данных
+static sgx_status_t rsa_encrypt(const uint8_t* data, size_t data_len, 
+                              const uint8_t* rsa_pub_key, size_t rsa_pub_key_len,
+                              uint8_t* encrypted_data, size_t* encrypted_data_len) {
+    if (!data || !rsa_pub_key || !encrypted_data || !encrypted_data_len) {
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+
+    // Prepare data = privkey + pubkey (32 + 65 = 97 bytes)
+    uint8_t plain[97];
+    memcpy(plain, data, 32);
+    memcpy(plain + 32, rsa_pub_key, rsa_pub_key_len);
+
+    // Debug: Print data before encryption
+    LOG_INFO_MACRO("Debug: Data before encryption:\n");
+    LOG_INFO_MACRO("Private key: ");
+    for (int i = 0; i < 32; i++) {
+        LOG_INFO_MACRO("%02x", plain[i]);
+    }
+    LOG_INFO_MACRO("\nPublic key: ");
+    for (int i = 32; i < 97; i++) {
+        LOG_INFO_MACRO("%02x", plain[i]);
+    }
+    LOG_INFO_MACRO("\n");
+
+    // Encrypt with RSA
+    uint8_t encrypted[384] = {0};
+    size_t encrypted_len = sizeof(encrypted);
+    sgx_status_t status = sgx_rsa_pub_encrypt_sha256(
+        rsa_pub_key,
+        encrypted,
+        &encrypted_len,
+        plain,
+        97  // Use exact size of plain data
+    );
+    if (status != SGX_SUCCESS) {
+        LOG_ERROR_MACRO("RSA encryption failed: %d\n", status);
+        return status;
+    }
+
+    // Debug: Print encrypted data
+    LOG_INFO_MACRO("Debug: Encrypted data:\n");
+    for (int i = 0; i < 384; i++) {
+        LOG_INFO_MACRO("%02x", encrypted[i]);
+    }
+    LOG_INFO_MACRO("\n");
+
+    // Save encrypted data to output
+    if (encrypted_data) {
+        memcpy(encrypted_data, encrypted, encrypted_len);
+    }
+    if (encrypted_data_len) {
+        *encrypted_data_len = encrypted_len;
+    }
+
+    return SGX_SUCCESS;
+}
+
+int ecall_generate_account_with_recovery(const char* hex_modulus, const char* hex_exponent, char* out_address) {
+    if (!hex_modulus || !hex_exponent || !out_address) {
+        LOG_ERROR_MACRO("Invalid input parameters\n");
+        return -1;
+    }
+
+    // Decode hex strings into byte arrays
+    uint8_t modulus[384] = {0};
+    uint8_t exponent[4] = {0};
+    size_t modulus_len = hex_to_bytes(hex_modulus, modulus, sizeof(modulus));
+    size_t exponent_len = hex_to_bytes(hex_exponent, exponent, sizeof(exponent));
+    if (modulus_len == 0 || exponent_len == 0) {
+        LOG_ERROR_MACRO("Failed to parse hex modulus or exponent\n");
+        return -1;
+    }
+
+    // Right-align into padded arrays
+    uint8_t padded_modulus[384] = {0};
+    uint8_t padded_exponent[4] = {0};
+    memcpy(&padded_modulus[384 - modulus_len], modulus, modulus_len);
+    memcpy(&padded_exponent[4 - exponent_len], exponent, exponent_len);
+
+    // Create SGX-compatible RSA public key
+    void* rsa_pub_key = nullptr;
+    LOG_INFO_MACRO("Debug: Creating RSA key with:\n");
+    LOG_INFO_MACRO("Modulus (hex): ");
+    for (int i = 0; i < 384; i++) {
+        LOG_INFO_MACRO("%02x", padded_modulus[i]);
+    }
+    LOG_INFO_MACRO("\nExponent (hex): ");
+    for (int i = 0; i < 4; i++) {
+        LOG_INFO_MACRO("%02x", padded_exponent[i]);
+    }
+    LOG_INFO_MACRO("\n");
+
+    sgx_status_t status = sgx_create_rsa_pub1_key(
+        384,
+        4,
+        padded_modulus,
+        padded_exponent,
+        &rsa_pub_key
+    );
+    if (status != SGX_SUCCESS) {
+        LOG_ERROR_MACRO("Failed to create RSA public key: %d\n", status);
+        return -1;
+    }
+    LOG_INFO_MACRO("Debug: RSA key created successfully\n");
+
+    // Generate Ethereum account
+    Account account = {0};
+    if (generate_account(&account) != 0) {
+        LOG_ERROR_MACRO("Account generation failed\n");
+        sgx_free_rsa_key(rsa_pub_key, SGX_RSA_PUBLIC_KEY, 384, 4);
+        return -1;
+    }
+
+    // Build account_id string from address
+    char account_id[43] = "0x";
+    for (int i = 0; i < 20; i++) {
+        snprintf(account_id + 2 + i * 2, 3, "%02x", account.address[i]);
+    }
+
+    // Save sealed account to disk
+    if (save_account_to_pool(account_id, &account) != 0) {
+        LOG_ERROR_MACRO("Failed to save account\n");
+        sgx_free_rsa_key(rsa_pub_key, SGX_RSA_PUBLIC_KEY, 384, 4);
+        return -1;
+    }
+
+    // Prepare data = privkey + pubkey (32 + 65 = 97 bytes)
+    uint8_t plain[97];
+    memcpy(plain, account.private_key, 32);
+    memcpy(plain + 32, account.public_key, 65);
+
+    // Debug: Print data before encryption
+    LOG_INFO_MACRO("Debug: Data before encryption:\n");
+    LOG_INFO_MACRO("Private key: ");
+    for (int i = 0; i < 32; i++) {
+        LOG_INFO_MACRO("%02x", plain[i]);
+    }
+    LOG_INFO_MACRO("\nPublic key: ");
+    for (int i = 32; i < 97; i++) {
+        LOG_INFO_MACRO("%02x", plain[i]);
+    }
+    LOG_INFO_MACRO("\n");
+
+    // Encrypt with RSA
+    uint8_t encrypted[384] = {0};
+    size_t encrypted_len = sizeof(encrypted);
+    LOG_INFO_MACRO("Debug: Starting RSA encryption...\n");
+    status = sgx_rsa_pub_encrypt_sha256(
+        rsa_pub_key,
+        encrypted,
+        &encrypted_len,
+        plain,
+        97  // Use exact size of plain data
+    );
+    if (status != SGX_SUCCESS) {
+        LOG_ERROR_MACRO("RSA encryption failed: %d\n", status);
+        sgx_free_rsa_key(rsa_pub_key, SGX_RSA_PUBLIC_KEY, 384, 4);
+        return -1;
+    }
+    LOG_INFO_MACRO("Debug: RSA encryption completed successfully\n");
+
+    // Debug: Print encrypted data
+    LOG_INFO_MACRO("Debug: Encrypted data:\n");
+    for (int i = 0; i < 384; i++) {
+        LOG_INFO_MACRO("%02x", encrypted[i]);
+    }
+    LOG_INFO_MACRO("\n");
+
+    // Free RSA key after successful encryption
+    sgx_free_rsa_key(rsa_pub_key, SGX_RSA_PUBLIC_KEY, 384, 4);
+    LOG_INFO_MACRO("Debug: RSA key freed\n");
+
+    // Save recovery blob to file
+    char filename[256];
+    snprintf(filename, sizeof(filename), "%s.account.recovery", account_id);
+    
+    // Save account using its address as filename
+    int ret = 0;
+    status = ocall_save_to_file(&ret, encrypted, 384, filename);  // Always save full RSA block
+    if (status != SGX_SUCCESS || ret != 0) {
+        LOG_ERROR_MACRO("Failed to save recovery file: status=%d, ret=%d\n", status, ret);
+        return -1;
+    }
+
+    // Return the address string
+    memcpy(out_address, account_id, 43);
+    LOG_INFO_MACRO("Account generated successfully: %s\n", account_id);
+    LOG_INFO_MACRO("Recovery file saved as: %s\n", filename);
+    return 0;
+}
 
 #ifdef __cplusplus
 }

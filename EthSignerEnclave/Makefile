@@ -60,7 +60,7 @@ ENCLAVE_LIBS = -lsgx_trts -lsgx_tcrypto -lsgx_tseal
 APP_LIBS = -lsgx_urts -lsgx_uae_service
 
 # Application settings
-App_Cpp_Files := App/App.cpp App/sgx_utils/sgx_utils.cpp
+App_Cpp_Files := App/App.cpp App/sgx_utils/sgx_utils.cpp App/utils.cpp
 App_Include_Paths := -I$(SGX_SDK)/include -IApp -IApp/sgx_utils
 
 App_C_Flags := $(SGX_COMMON_CFLAGS) -fPIC -Wno-attributes $(App_Include_Paths)
@@ -109,6 +109,7 @@ Enclave_Link_Flags := $(SGX_COMMON_CFLAGS) -Wl,--no-undefined -nostdlib -nodefau
 # secp256k1 settings
 SECP256K1_DIR := lib/secp256k1
 SECP256K1_INCLUDE := -I$(SECP256K1_DIR)/include
+SECP256K1_CFLAGS := -DENABLE_MODULE_RECOVERY
 
 # Generate source files
 Enclave_C_Objects := $(Enclave_C_Files:.c=.o)
@@ -169,7 +170,11 @@ App/sgx_utils/sgx_utils.o: App/sgx_utils/sgx_utils.cpp
 	@$(CXX) $(App_Cpp_Flags) -c $< -o $@
 	@echo "CXX  <=  $<"
 
-$(App_Name): App/Enclave_u.o App/App.o App/sgx_utils/sgx_utils.o
+App/utils.o: App/utils.cpp
+	@$(CXX) $(App_Cpp_Flags) -c $< -o $@
+	@echo "CXX  <=  $<"
+
+$(App_Name): App/Enclave_u.o App/App.o App/sgx_utils/sgx_utils.o App/utils.o
 	@$(CXX) $^ -o $@ $(App_Link_Flags)
 	@echo "LINK =>  $@"
 
@@ -192,7 +197,7 @@ Enclave/sha3.o: Enclave/sha3.c
 	@echo "CC   <=  $<"
 
 %.o: %.c
-	@$(CC) $(Enclave_C_Flags) -c $< -o $@
+	@$(CC) $(Enclave_C_Flags) $(SECP256K1_CFLAGS) -c $< -o $@
 	@echo "CC   <=  $<"
 
 $(Enclave_Name): Enclave/Enclave_t.o Enclave/Enclave.o $(Enclave_C_Objects)

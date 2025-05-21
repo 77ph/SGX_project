@@ -33,7 +33,12 @@ enclave {
                                        [out, size=4300] char* account_addresses);
 
         // Новая функция для генерации аккаунта в пул
-        public int ecall_generate_account_to_pool([out, size=42] char* account_address);
+        public int ecall_generate_account_to_pool([out, size=43] char* account_address);
+
+        // Новая функция для генерации аккаунта с возможностью восстановления
+        public int ecall_generate_account_with_recovery([in, string] const char* modulus_hex,  // modulus (n) в hex формате
+                                                      [in, string] const char* exponent_hex,  // exponent (e) в hex формате
+                                                      [out, size=42] char* account_address);
 
         // Test functions
         // public int ecall_test_entropy([out, size=size] uint8_t* entropy, size_t size);

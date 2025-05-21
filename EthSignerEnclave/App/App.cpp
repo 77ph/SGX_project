@@ -21,6 +21,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <errno.h>
+#include <algorithm>  // Добавляем для std::remove
+#include "utils.h"
 
 #define BUFLEN 2048
 #define MAXPATHLEN 255
@@ -187,6 +189,7 @@ void print_help() {
     printf("  sign_pool 0x1234...5678 0000000000000000000000000000000000000000000000000000000000000001 - Sign with pool account\n");
     printf("  pool_status - Show pool status\n");
     printf("  generate_pool - Generate new account in pool\n");
+    printf("  generate_pool_recovery <modulus_hex> <exponent_hex> - Generate new account with recovery option (modulus and exponent in hex format)\n");
     printf("  set_log_level <level> - Set logging level (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG)\n");
     printf("  run_tests - Run system validation tests\n");
     printf("  help - Show this help message\n");
@@ -203,9 +206,9 @@ int main(int argc, char *argv[]) {
     status = sgx_create_enclave(ENCLAVE_FILENAME, SGX_DEBUG_FLAG, &token, &updated, &global_eid, NULL);
     if (status != SGX_SUCCESS) {
         printf("Error: Failed to create enclave\n");
-        return -1;
+        return -1; 
     }
-
+ 
     // Start in test mode for the global test suite
     set_test_mode(true);
 
@@ -240,6 +243,7 @@ int main(int argc, char *argv[]) {
     printf("  sign_pool 0x1234...5678 0000000000000000000000000000000000000000000000000000000000000001 - Sign with pool account\n");
     printf("  pool_status - Show pool status\n");
     printf("  generate_pool - Generate new account in pool\n");
+    printf("  generate_pool_recovery <modulus_hex> <exponent_hex> - Generate new account with recovery option\n");
     printf("  set_log_level <level> - Set logging level (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG)\n");
     printf("  run_tests - Run system validation tests\n");
     printf("  help - Show this help message\n");
@@ -271,7 +275,7 @@ int main(int argc, char *argv[]) {
             }
             printf("Loading account %s to pool...\n", arg);
             status = ecall_load_account_to_pool(global_eid, &retval, arg);
-            if (status != SGX_SUCCESS) {
+        if (status != SGX_SUCCESS) {
                 printf("Error: Failed to load account to pool\n");
                 continue;
             }
@@ -328,9 +332,9 @@ int main(int argc, char *argv[]) {
             // Print signature in hex
             printf("Signature: ");
             for (int i = 0; i < 65; i++) {
-                printf("%02x", signature[i]);
-            }
-            printf("\n");
+        printf("%02x", signature[i]);
+    }
+    printf("\n");
         }
         else if (strcmp(command, "pool_status") == 0) {
             uint32_t total_accounts = 0;
@@ -363,6 +367,69 @@ int main(int argc, char *argv[]) {
             }
             printf("Account generated in pool at index %d\n", retval);
             printf("Account address: %s\n", account_address);
+        }
+        else if (strncmp(command, "generate_pool_recovery ", 22) == 0) {
+            // Получаем modulus и exponent из аргумента
+            char full_line[4096];
+            printf("Enter modulus and exponent (hex): ");
+            if (fgets(full_line, sizeof(full_line), stdin) == NULL) {
+                printf("Error reading input\n");
+                continue;
+            }
+            
+            // Удаляем trailing newline
+            full_line[strcspn(full_line, "\n")] = 0;
+            
+            printf("Debug: Input line: '%s'\n", full_line);
+            
+            // Ищем последний пробел в строке
+            const char* last_space = strrchr(full_line, ' ');
+            if (!last_space) {
+                printf("Error: Invalid format. Expected: <modulus_hex> <exponent_hex>\n");
+                printf("Debug: No space found in input\n");
+                continue;
+            }
+            
+            // Разделяем строку на modulus и exponent
+            char modulus_hex[2048] = {0};
+            char exponent_hex[32] = {0};
+            
+            // Копируем modulus (до последнего пробела)
+            size_t modulus_len = last_space - full_line;
+            if (modulus_len >= sizeof(modulus_hex)) {
+                printf("Error: Modulus too long\n");
+                continue;
+            }
+            strncpy(modulus_hex, full_line, modulus_len);
+            modulus_hex[modulus_len] = '\0';
+            
+            // Копируем exponent (после последнего пробела)
+            strncpy(exponent_hex, last_space + 1, sizeof(exponent_hex) - 1);
+            exponent_hex[sizeof(exponent_hex) - 1] = '\0';
+
+            if (strlen(modulus_hex) == 0 || strlen(exponent_hex) == 0) {
+                printf("Error: Both modulus and exponent are required\n");
+                printf("Debug: Modulus length: %zu, Exponent length: %zu\n", strlen(modulus_hex), strlen(exponent_hex));
+                continue;
+            }
+
+            printf("Debug: Modulus (hex): %s\n", modulus_hex);
+            printf("Debug: Exponent (hex): %s\n", exponent_hex);
+
+            // Вызываем Enclave
+            char account_address[43] = {0};
+            status = ecall_generate_account_with_recovery(global_eid, &retval, 
+                modulus_hex, exponent_hex, account_address);
+            if (status != SGX_SUCCESS) {
+                printf("Error: Enclave call failed with status: %d\n", status);
+                continue;
+            }
+            if (retval < 0) {
+                printf("Error: Failed to generate account with recovery (error code: %d)\n", retval);
+                continue;
+            }
+            printf("Account generated successfully: %s\n", account_address);
+            printf("Recovery file saved as: %s.account.recovery\n", account_address);
         }
         else if (strcmp(command, "help") == 0) {
             print_help();
@@ -414,4 +481,4 @@ int main(int argc, char *argv[]) {
     // Destroy the enclave
     sgx_destroy_enclave(global_eid);
     return 0;
-}
+} 
