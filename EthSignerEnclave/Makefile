@@ -85,9 +85,36 @@ Enclave_Cpp_Files := Enclave/Enclave.cpp
 Enclave_C_Files := lib/secp256k1/src/secp256k1.c \
                    lib/secp256k1/src/precomputed_ecmult.c \
                    lib/secp256k1/src/precomputed_ecmult_gen.c \
-                   Enclave/sha3.c
+                   Enclave/sha3.c \
+                   Enclave/bearssl/src/rsa/rsa_i31_pub.c \
+                   Enclave/bearssl/src/rsa/rsa_i31_oaep_encrypt.c \
+                   Enclave/bearssl/src/rsa/rsa_oaep_pad.c \
+                   Enclave/bearssl/src/int/i31_add.c \
+                   Enclave/bearssl/src/int/i31_bitlen.c \
+                   Enclave/bearssl/src/int/i31_decode.c \
+                   Enclave/bearssl/src/int/i31_encode.c \
+                   Enclave/bearssl/src/int/i31_fmont.c \
+                   Enclave/bearssl/src/int/i31_modpow.c \
+                   Enclave/bearssl/src/int/i31_modpow2.c \
+                   Enclave/bearssl/src/int/i31_montmul.c \
+                   Enclave/bearssl/src/int/i31_muladd.c \
+                   Enclave/bearssl/src/int/i31_ninv31.c \
+                   Enclave/bearssl/src/int/i31_reduce.c \
+                   Enclave/bearssl/src/int/i31_sub.c \
+                   Enclave/bearssl/src/int/i31_tmont.c \
+                   Enclave/bearssl/src/int/i31_decmod.c \
+                   Enclave/bearssl/src/int/i32_div32.c \
+                   Enclave/bearssl/src/hash/sha2small.c \
+                   Enclave/bearssl/src/hash/dig_oid.c \
+                   Enclave/bearssl/src/hash/dig_size.c \
+                   Enclave/bearssl/src/hash/mgf1.c \
+                   Enclave/bearssl/src/codec/ccopy.c \
+                   Enclave/bearssl/src/codec/dec32be.c \
+                   Enclave/bearssl/src/codec/enc32be.c \
+                   Enclave/bearssl/src/mac/hmac.c \
+                   Enclave/bearssl/src/kdf/hkdf.c
 
-Enclave_Include_Paths := -I$(SGX_SDK)/include -I$(SGX_SDK)/include/tlibc -IEnclave -Ilib/secp256k1/include -Ilib/secp256k1/src
+Enclave_Include_Paths := -I$(SGX_SDK)/include -I$(SGX_SDK)/include/tlibc -IEnclave -Ilib/secp256k1/include -Ilib/secp256k1/src -IEnclave/bearssl/inc
 
 Enclave_C_Flags := $(SGX_COMMON_CFLAGS) -nostdinc -fvisibility=hidden -fpie -ffunction-sections -fdata-sections $(Enclave_Include_Paths) -Wno-conversion -Wno-sign-conversion
 Enclave_Cpp_Flags := $(Enclave_C_Flags) -std=c++11 -nostdinc++
@@ -228,7 +255,4 @@ clean:
 	@echo "Clean completed."
 
 # Запуск тестов
-test: all
-	python3 test_account_pool.py
-
-.PHONY: all clean test
+test: all 

@@ -13,6 +13,8 @@
 #include <time.h>
 #include <math.h>  // Добавляем для log2
 #include "sha3.h"  // Добавляем для Keccak-256
+#include "bearssl.h"
+#include "bearssl_rsa.h"
 
 #define ENCLAVE_BUFSIZ 1024
 // Logging levels
@@ -1623,7 +1625,7 @@ int ecall_generate_account_to_pool(char* account_address) {
     return free_slot;
 }
 
-// Функция для RSA шифрования данных
+// Функция для RSA шифрования данных с использованием BearSSL
 static sgx_status_t rsa_encrypt(const uint8_t* data, size_t data_len, 
                               const uint8_t* rsa_pub_key, size_t rsa_pub_key_len,
                               uint8_t* encrypted_data, size_t* encrypted_data_len) {
@@ -1648,34 +1650,45 @@ static sgx_status_t rsa_encrypt(const uint8_t* data, size_t data_len,
     }
     LOG_INFO_MACRO("\n");
 
-    // Encrypt with RSA
+    // Initialize BearSSL RSA public key
+    br_rsa_public_key pk;
+    pk.n = (uint8_t*)rsa_pub_key;
+    pk.nlen = 384;  // RSA-3072 modulus length
+    pk.e = (uint8_t*)(rsa_pub_key + 384);
+    pk.elen = 4;    // Exponent length
+
+    // Encrypt with RSA OAEP
     uint8_t encrypted[384] = {0};
-    size_t encrypted_len = sizeof(encrypted);
-    sgx_status_t status = sgx_rsa_pub_encrypt_sha256(
-        rsa_pub_key,
-        encrypted,
-        &encrypted_len,
-        plain,
-        97  // Use exact size of plain data
+    size_t out_len = br_rsa_i31_oaep_encrypt(
+        NULL,               // PRNG (NULL for deterministic)
+        &br_sha256_vtable, // Hash function for OAEP
+        NULL,              // Label
+        0,                 // Label length
+        &pk,               // RSA public key
+        plain,             // Data to encrypt
+        97,                // Data length
+        encrypted,         // Output buffer
+        sizeof(encrypted)  // Output buffer size
     );
-    if (status != SGX_SUCCESS) {
-        LOG_ERROR_MACRO("RSA encryption failed: %d\n", status);
-        return status;
+
+    if (out_len == 0) {
+        LOG_ERROR_MACRO("BearSSL RSA encryption failed\n");
+        return SGX_ERROR_UNEXPECTED;
     }
 
     // Debug: Print encrypted data
     LOG_INFO_MACRO("Debug: Encrypted data:\n");
-    for (int i = 0; i < 384; i++) {
+    for (int i = 0; i < out_len; i++) {
         LOG_INFO_MACRO("%02x", encrypted[i]);
     }
     LOG_INFO_MACRO("\n");
 
     // Save encrypted data to output
     if (encrypted_data) {
-        memcpy(encrypted_data, encrypted, encrypted_len);
+        memcpy(encrypted_data, encrypted, out_len);
     }
     if (encrypted_data_len) {
-        *encrypted_data_len = encrypted_len;
+        *encrypted_data_len = out_len;
     }
 
     return SGX_SUCCESS;
@@ -1703,9 +1716,12 @@ int ecall_generate_account_with_recovery(const char* hex_modulus, const char* he
     memcpy(&padded_modulus[384 - modulus_len], modulus, modulus_len);
     memcpy(&padded_exponent[4 - exponent_len], exponent, exponent_len);
 
-    // Create SGX-compatible RSA public key
-    void* rsa_pub_key = nullptr;
-    LOG_INFO_MACRO("Debug: Creating RSA key with:\n");
+    // Create RSA public key buffer (modulus + exponent)
+    uint8_t rsa_pub_key[388] = {0};  // 384 bytes modulus + 4 bytes exponent
+    memcpy(rsa_pub_key, padded_modulus, 384);
+    memcpy(rsa_pub_key + 384, padded_exponent, 4);
+
+    LOG_INFO_MACRO("Debug: RSA key prepared:\n");
     LOG_INFO_MACRO("Modulus (hex): ");
     for (int i = 0; i < 384; i++) {
         LOG_INFO_MACRO("%02x", padded_modulus[i]);
@@ -1716,24 +1732,10 @@ int ecall_generate_account_with_recovery(const char* hex_modulus, const char* he
     }
     LOG_INFO_MACRO("\n");
 
-    sgx_status_t status = sgx_create_rsa_pub1_key(
-        384,
-        4,
-        padded_modulus,
-        padded_exponent,
-        &rsa_pub_key
-    );
-    if (status != SGX_SUCCESS) {
-        LOG_ERROR_MACRO("Failed to create RSA public key: %d\n", status);
-        return -1;
-    }
-    LOG_INFO_MACRO("Debug: RSA key created successfully\n");
-
     // Generate Ethereum account
     Account account = {0};
     if (generate_account(&account) != 0) {
         LOG_ERROR_MACRO("Account generation failed\n");
-        sgx_free_rsa_key(rsa_pub_key, SGX_RSA_PUBLIC_KEY, 384, 4);
         return -1;
     }
 
@@ -1746,7 +1748,6 @@ int ecall_generate_account_with_recovery(const char* hex_modulus, const char* he
     // Save sealed account to disk
     if (save_account_to_pool(account_id, &account) != 0) {
         LOG_ERROR_MACRO("Failed to save account\n");
-        sgx_free_rsa_key(rsa_pub_key, SGX_RSA_PUBLIC_KEY, 384, 4);
         return -1;
     }
 
@@ -1767,34 +1768,32 @@ int ecall_generate_account_with_recovery(const char* hex_modulus, const char* he
     }
     LOG_INFO_MACRO("\n");
 
-    // Encrypt with RSA
+    // Encrypt with RSA using BearSSL
     uint8_t encrypted[384] = {0};
     size_t encrypted_len = sizeof(encrypted);
     LOG_INFO_MACRO("Debug: Starting RSA encryption...\n");
-    status = sgx_rsa_pub_encrypt_sha256(
-        rsa_pub_key,
-        encrypted,
-        &encrypted_len,
+    
+    sgx_status_t status = rsa_encrypt(
         plain,
-        97  // Use exact size of plain data
+        97,
+        rsa_pub_key,
+        388,
+        encrypted,
+        &encrypted_len
     );
+
     if (status != SGX_SUCCESS) {
         LOG_ERROR_MACRO("RSA encryption failed: %d\n", status);
-        sgx_free_rsa_key(rsa_pub_key, SGX_RSA_PUBLIC_KEY, 384, 4);
         return -1;
     }
     LOG_INFO_MACRO("Debug: RSA encryption completed successfully\n");
 
     // Debug: Print encrypted data
     LOG_INFO_MACRO("Debug: Encrypted data:\n");
-    for (int i = 0; i < 384; i++) {
+    for (int i = 0; i < encrypted_len; i++) {
         LOG_INFO_MACRO("%02x", encrypted[i]);
     }
     LOG_INFO_MACRO("\n");
-
-    // Free RSA key after successful encryption
-    sgx_free_rsa_key(rsa_pub_key, SGX_RSA_PUBLIC_KEY, 384, 4);
-    LOG_INFO_MACRO("Debug: RSA key freed\n");
 
     // Save recovery blob to file
     char filename[256];
@@ -1802,7 +1801,7 @@ int ecall_generate_account_with_recovery(const char* hex_modulus, const char* he
     
     // Save account using its address as filename
     int ret = 0;
-    status = ocall_save_to_file(&ret, encrypted, 384, filename);  // Always save full RSA block
+    status = ocall_save_to_file(&ret, encrypted, encrypted_len, filename);
     if (status != SGX_SUCCESS || ret != 0) {
         LOG_ERROR_MACRO("Failed to save recovery file: status=%d, ret=%d\n", status, ret);
         return -1;
@@ -1818,3 +1817,4 @@ int ecall_generate_account_with_recovery(const char* hex_modulus, const char* he
 #ifdef __cplusplus
 }
 #endif
+
