@@ -190,10 +190,14 @@ void account_index_clear() {
 // Helper function to convert hex string to bytes
 static size_t hex_to_bytes(const char* hex_str, uint8_t* out_bytes, size_t max_out_len) {
     if (!hex_str || !out_bytes || max_out_len == 0) {
+        LOG_ERROR_MACRO("Invalid parameters to hex_to_bytes\n");
         return 0;
     }
 
     size_t hex_len = strlen(hex_str);
+    LOG_INFO_MACRO("Debug: hex_to_bytes input length: %zu\n", hex_len);
+    LOG_INFO_MACRO("Debug: hex_to_bytes input: %s\n", hex_str);
+
     if (hex_len < 2) {
         LOG_ERROR_MACRO("Hex string too short\n");
         return 0;
@@ -204,29 +208,34 @@ static size_t hex_to_bytes(const char* hex_str, uint8_t* out_bytes, size_t max_o
     if (hex_str[0] == '0' && hex_str[1] == 'x') {
         hex_start += 2;
         hex_len -= 2;
+        LOG_INFO_MACRO("Debug: Skipped 0x prefix, new length: %zu\n", hex_len);
     }
 
     if (hex_len % 2 != 0) {
-        LOG_ERROR_MACRO("Invalid hex string length\n");
+        LOG_ERROR_MACRO("Invalid hex string length: %zu\n", hex_len);
         return 0;
     }
 
     size_t bytes_len = hex_len / 2;
+    LOG_INFO_MACRO("Debug: Will convert to %zu bytes\n", bytes_len);
+
     if (bytes_len > max_out_len) {
-        LOG_ERROR_MACRO("Output buffer too small\n");
+        LOG_ERROR_MACRO("Output buffer too small: need %zu, have %zu\n", bytes_len, max_out_len);
         return 0;
     }
 
+    // Convert hex to bytes
     for (size_t i = 0; i < bytes_len; i++) {
         char byte_str[3] = {hex_start[i*2], hex_start[i*2+1], 0};
         char* end;
         out_bytes[i] = (uint8_t)strtol(byte_str, &end, 16);
         if (*end != 0) {
-            LOG_ERROR_MACRO("Invalid hex character at position %zu\n", i*2);
+            LOG_ERROR_MACRO("Invalid hex character at position %zu: '%s'\n", i*2, byte_str);
             return 0;
         }
     }
 
+    LOG_INFO_MACRO("Debug: Successfully converted %zu bytes\n", bytes_len);
     return bytes_len;
 }
 
@@ -1625,50 +1634,106 @@ int ecall_generate_account_to_pool(char* account_address) {
     return free_slot;
 }
 
+// Функция-обертка над sgx_read_rand для BearSSL
+static size_t enclave_rng(void* ctx, unsigned char* out, size_t len) {
+    (void)ctx;  // unused
+    if (sgx_read_rand(out, (uint32_t)len) != SGX_SUCCESS) {
+        return 0;
+    }
+    return len;
+}
+
+// Структура PRNG для BearSSL
+static const br_prng_class enclave_prng_class = {
+    .context_size = 0,
+    .init = NULL,
+    .generate = [](const br_prng_class** ctx, void* out, size_t len) -> void {
+        (void)ctx;  // unused
+        sgx_status_t status = sgx_read_rand((uint8_t*)out, (uint32_t)len);
+        if (status != SGX_SUCCESS) {
+            LOG_ERROR_MACRO("Failed to generate random data: %d\n", status);
+            // В случае ошибки заполняем буфер нулями
+            memset(out, 0, len);
+        }
+    }
+};
+
 // Функция для RSA шифрования данных с использованием BearSSL
-static sgx_status_t rsa_encrypt(const uint8_t* data, size_t data_len, 
-                              const uint8_t* rsa_pub_key, size_t rsa_pub_key_len,
+static sgx_status_t rsa_encrypt(const uint8_t* data, size_t data_len,
+                              const uint8_t* modulus, size_t modulus_len,
+                              const uint8_t* exponent, size_t exponent_len,
                               uint8_t* encrypted_data, size_t* encrypted_data_len) {
-    if (!data || !rsa_pub_key || !encrypted_data || !encrypted_data_len) {
+    if (!data || !modulus || !exponent || !encrypted_data || !encrypted_data_len) {
         return SGX_ERROR_INVALID_PARAMETER;
     }
-
-    // Prepare data = privkey + pubkey (32 + 65 = 97 bytes)
-    uint8_t plain[97];
-    memcpy(plain, data, 32);
-    memcpy(plain + 32, rsa_pub_key, rsa_pub_key_len);
 
     // Debug: Print data before encryption
     LOG_INFO_MACRO("Debug: Data before encryption:\n");
     LOG_INFO_MACRO("Private key: ");
     for (int i = 0; i < 32; i++) {
-        LOG_INFO_MACRO("%02x", plain[i]);
+        LOG_INFO_MACRO("%02x", data[i]);
     }
     LOG_INFO_MACRO("\nPublic key: ");
     for (int i = 32; i < 97; i++) {
-        LOG_INFO_MACRO("%02x", plain[i]);
+        LOG_INFO_MACRO("%02x", data[i]);
     }
     LOG_INFO_MACRO("\n");
 
     // Initialize BearSSL RSA public key
     br_rsa_public_key pk;
-    pk.n = (uint8_t*)rsa_pub_key;
-    pk.nlen = 384;  // RSA-3072 modulus length
-    pk.e = (uint8_t*)(rsa_pub_key + 384);
-    pk.elen = 4;    // Exponent length
+    pk.n = (unsigned char*)modulus;
+    pk.nlen = (uint32_t)modulus_len;
+    pk.e = (unsigned char*)exponent;
+    pk.elen = (uint32_t)exponent_len;
+
+    LOG_INFO_MACRO("Debug: RSA key lengths - modulus: %zu, exponent: %zu\n", modulus_len, exponent_len);
+    LOG_INFO_MACRO("Debug: RSA key values:\n");
+    LOG_INFO_MACRO("Modulus: ");
+    for (size_t i = 0; i < modulus_len; i++) {
+        LOG_INFO_MACRO("%02x", pk.n[i]);
+    }
+    LOG_INFO_MACRO("\nExponent: ");
+    for (size_t i = 0; i < exponent_len; i++) {
+        LOG_INFO_MACRO("%02x", pk.e[i]);
+    }
+    LOG_INFO_MACRO("\n");
+
+    // Check OAEP padding conditions
+    size_t hlen = br_sha256_SIZE;  // 32 bytes for SHA-256
+    if (modulus_len < ((hlen << 1) + 2)) {
+        LOG_ERROR_MACRO("Modulus too short for OAEP padding\n");
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+
+    size_t max_src_len = modulus_len - (hlen << 1) - 2;
+    if (data_len > max_src_len) {
+        LOG_ERROR_MACRO("Data too long for OAEP padding (max %zu bytes)\n", max_src_len);
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+
+    if (*encrypted_data_len < modulus_len) {
+        LOG_ERROR_MACRO("Output buffer too small (need %zu bytes)\n", modulus_len);
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+
+    // Проверяем, что экспонента равна 0x10001 (65537)
+    if (exponent_len != 3 || exponent[0] != 0x01 || exponent[1] != 0x00 || exponent[2] != 0x01) {
+        LOG_ERROR_MACRO("Invalid exponent: must be 0x10001 (65537)\n");
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
 
     // Encrypt with RSA OAEP
-    uint8_t encrypted[384] = {0};
+    const br_prng_class* prng = &enclave_prng_class;
     size_t out_len = br_rsa_i31_oaep_encrypt(
-        NULL,               // PRNG (NULL for deterministic)
+        &prng,             // Use our PRNG class
         &br_sha256_vtable, // Hash function for OAEP
         NULL,              // Label
         0,                 // Label length
         &pk,               // RSA public key
-        plain,             // Data to encrypt
-        97,                // Data length
-        encrypted,         // Output buffer
-        sizeof(encrypted)  // Output buffer size
+        encrypted_data,    // Output buffer (dst)
+        *encrypted_data_len, // Output buffer size (dst_max_len)
+        data,              // Data to encrypt (src)
+        data_len           // Data length (src_len)
     );
 
     if (out_len == 0) {
@@ -1679,18 +1744,11 @@ static sgx_status_t rsa_encrypt(const uint8_t* data, size_t data_len,
     // Debug: Print encrypted data
     LOG_INFO_MACRO("Debug: Encrypted data:\n");
     for (int i = 0; i < out_len; i++) {
-        LOG_INFO_MACRO("%02x", encrypted[i]);
+        LOG_INFO_MACRO("%02x", encrypted_data[i]);
     }
     LOG_INFO_MACRO("\n");
 
-    // Save encrypted data to output
-    if (encrypted_data) {
-        memcpy(encrypted_data, encrypted, out_len);
-    }
-    if (encrypted_data_len) {
-        *encrypted_data_len = out_len;
-    }
-
+    *encrypted_data_len = out_len;
     return SGX_SUCCESS;
 }
 
@@ -1701,34 +1759,65 @@ int ecall_generate_account_with_recovery(const char* hex_modulus, const char* he
     }
 
     // Decode hex strings into byte arrays
-    uint8_t modulus[384] = {0};
-    uint8_t exponent[4] = {0};
+    uint8_t modulus[384] = {0};  // Инициализируем нулями
     size_t modulus_len = hex_to_bytes(hex_modulus, modulus, sizeof(modulus));
-    size_t exponent_len = hex_to_bytes(hex_exponent, exponent, sizeof(exponent));
-    if (modulus_len == 0 || exponent_len == 0) {
-        LOG_ERROR_MACRO("Failed to parse hex modulus or exponent\n");
+    if (modulus_len == 0) {
+        LOG_ERROR_MACRO("Failed to parse hex modulus\n");
         return -1;
     }
 
-    // Right-align into padded arrays
-    uint8_t padded_modulus[384] = {0};
-    uint8_t padded_exponent[4] = {0};
-    memcpy(&padded_modulus[384 - modulus_len], modulus, modulus_len);
-    memcpy(&padded_exponent[4 - exponent_len], exponent, exponent_len);
+    // Убираем ведущие нули из модуля
+    while (modulus_len > 1 && modulus[0] == 0x00) {
+        memmove(modulus, modulus + 1, --modulus_len);
+    }
 
-    // Create RSA public key buffer (modulus + exponent)
-    uint8_t rsa_pub_key[388] = {0};  // 384 bytes modulus + 4 bytes exponent
-    memcpy(rsa_pub_key, padded_modulus, 384);
-    memcpy(rsa_pub_key + 384, padded_exponent, 4);
+    // Убираем завершающие нули из модуля
+    while (modulus_len > 1 && modulus[modulus_len - 1] == 0x00) {
+        --modulus_len;
+    }
+
+    LOG_INFO_MACRO("Debug: Modulus length after cleanup: %zu\n", modulus_len);
+
+    // Используем экспоненту из входных параметров
+    uint8_t exponent[3] = {0};
+    
+    // Проверяем и обрабатываем входную экспоненту
+    const char* exp_ptr = hex_exponent;
+    LOG_INFO_MACRO("Debug: Original exponent: %s\n", hex_exponent);
+    
+    // Пропускаем ведущие нули
+    while (*exp_ptr == '0') {
+        LOG_INFO_MACRO("Debug: Skipping leading zero\n");
+        exp_ptr++;
+    }
+    
+    LOG_INFO_MACRO("Debug: Exponent after skipping zeros: %s\n", exp_ptr);
+    
+    // Если длина нечетная, добавляем ведущий ноль
+    char padded_exp[8] = {0};  // Буфер для экспоненты с ведущим нулем
+    if (strlen(exp_ptr) % 2 != 0) {
+        LOG_INFO_MACRO("Debug: Adding leading zero to make length even\n");
+        padded_exp[0] = '0';
+        char* dst = padded_exp + 1;
+        const char* src = exp_ptr;
+        while ((*dst++ = *src++) != '\0');
+        exp_ptr = padded_exp;
+    }
+    
+    size_t exponent_len = hex_to_bytes(exp_ptr, exponent, sizeof(exponent));
+    if (exponent_len == 0) {
+        LOG_ERROR_MACRO("Failed to parse hex exponent\n");
+        return -1;
+    }
 
     LOG_INFO_MACRO("Debug: RSA key prepared:\n");
-    LOG_INFO_MACRO("Modulus (hex): ");
-    for (int i = 0; i < 384; i++) {
-        LOG_INFO_MACRO("%02x", padded_modulus[i]);
+    LOG_INFO_MACRO("Modulus: ");
+    for (size_t i = 0; i < modulus_len; i++) {
+        LOG_INFO_MACRO("%02x", modulus[i]);
     }
-    LOG_INFO_MACRO("\nExponent (hex): ");
-    for (int i = 0; i < 4; i++) {
-        LOG_INFO_MACRO("%02x", padded_exponent[i]);
+    LOG_INFO_MACRO("\nExponent: ");
+    for (size_t i = 0; i < exponent_len; i++) {
+        LOG_INFO_MACRO("%02x", exponent[i]);
     }
     LOG_INFO_MACRO("\n");
 
@@ -1756,28 +1845,25 @@ int ecall_generate_account_with_recovery(const char* hex_modulus, const char* he
     memcpy(plain, account.private_key, 32);
     memcpy(plain + 32, account.public_key, 65);
 
-    // Debug: Print data before encryption
-    LOG_INFO_MACRO("Debug: Data before encryption:\n");
-    LOG_INFO_MACRO("Private key: ");
-    for (int i = 0; i < 32; i++) {
-        LOG_INFO_MACRO("%02x", plain[i]);
-    }
-    LOG_INFO_MACRO("\nPublic key: ");
-    for (int i = 32; i < 97; i++) {
-        LOG_INFO_MACRO("%02x", plain[i]);
-    }
-    LOG_INFO_MACRO("\n");
-
-    // Encrypt with RSA using BearSSL
-    uint8_t encrypted[384] = {0};
-    size_t encrypted_len = sizeof(encrypted);
-    LOG_INFO_MACRO("Debug: Starting RSA encryption...\n");
+    // Calculate maximum data size for OAEP padding
+    size_t hlen = br_sha256_SIZE;  // 32 bytes for SHA-256
+    size_t max_data_len = modulus_len - (hlen << 1) - 2;  // OAEP padding size
     
+    if (sizeof(plain) > max_data_len) {
+        LOG_ERROR_MACRO("Data too large for RSA OAEP encryption (max %zu bytes)\n", max_data_len);
+        return -1;
+    }
+
+    // Encrypt data
+    uint8_t encrypted[384] = {0};  // Размер должен быть равен размеру модуля
+    size_t encrypted_len = modulus_len;  // Используем точный размер модуля
     sgx_status_t status = rsa_encrypt(
         plain,
-        97,
-        rsa_pub_key,
-        388,
+        sizeof(plain),
+        modulus,
+        modulus_len,
+        exponent,
+        exponent_len,
         encrypted,
         &encrypted_len
     );
@@ -1786,14 +1872,6 @@ int ecall_generate_account_with_recovery(const char* hex_modulus, const char* he
         LOG_ERROR_MACRO("RSA encryption failed: %d\n", status);
         return -1;
     }
-    LOG_INFO_MACRO("Debug: RSA encryption completed successfully\n");
-
-    // Debug: Print encrypted data
-    LOG_INFO_MACRO("Debug: Encrypted data:\n");
-    for (int i = 0; i < encrypted_len; i++) {
-        LOG_INFO_MACRO("%02x", encrypted[i]);
-    }
-    LOG_INFO_MACRO("\n");
 
     // Save recovery blob to file
     char filename[256];
