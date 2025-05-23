@@ -88,7 +88,7 @@ See [LICENSE](LICENSE) file for details.
   - `Enclave.h` - Enclave header
   - `Enclave.edl` - Enclave Definition Language file
 - `lib/` - External libraries
-  - `secp256k1/` - Ethereum's secp256k1 implementation
+  - `secp256k1/` - Bitcoin core secp256k1 implementation
   - `bearssl/` - BearSSL for RSA encryption
 - `accounts/` - Account storage directory
 - `test_accounts/` - Test account storage directory
