@@ -32,6 +32,7 @@ Enclave/Enclave_t.*
 # Other
 resume.txt
 decrypt.c
+history.txt
 
 # Backup directories
 backup_*/

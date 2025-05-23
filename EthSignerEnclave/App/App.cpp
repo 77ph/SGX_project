@@ -190,6 +190,7 @@ void print_help() {
     printf("  pool_status - Show pool status\n");
     printf("  generate_pool - Generate new account in pool\n");
     printf("  generate_pool_recovery <modulus_hex> <exponent_hex> - Generate new account with recovery option (modulus and exponent in hex format)\n");
+    printf("  get_recovery_base64 <address> - Get base64 encoded recovery file\n");
     printf("  set_log_level <level> - Set logging level (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG)\n");
     printf("  run_tests - Run system validation tests\n");
     printf("  help - Show this help message\n");
@@ -439,6 +440,39 @@ int main(int argc, char *argv[]) {
                     printf("  2: INFO, WARNING and ERROR\n");
                     printf("  3: DEBUG, INFO, WARNING and ERROR\n");
                 }
+            }
+            else if (strcmp(command, "get_recovery_base64") == 0) {
+                if (strlen(arg) < 42 || strncmp(arg, "0x", 2) != 0) {
+                    printf("Error: Invalid Ethereum address format. Expected: 0x followed by 40 hex characters\n");
+                    continue;
+                }
+
+                // Read recovery file
+                std::string filename = std::string("accounts/") + arg + ".account.recovery";
+                FILE* file = fopen(filename.c_str(), "rb");
+                if (!file) {
+                    printf("Error: Could not open recovery file: %s\n", filename.c_str());
+                    continue;
+                }
+
+                // Get file size
+                fseek(file, 0, SEEK_END);
+                long file_size = ftell(file);
+                fseek(file, 0, SEEK_SET);
+
+                // Read file into vector
+                std::vector<uint8_t> data(file_size);
+                size_t read = fread(data.data(), 1, file_size, file);
+                fclose(file);
+
+                if (read != file_size) {
+                    printf("Error: Failed to read recovery file\n");
+                    continue;
+                }
+
+                // Encode to base64
+                std::string base64_data = base64_encode(data);
+                printf("%s\n", base64_data.c_str());
             }
         } else {
             printf("Debug: Command: '%s' (no arguments)\n", command);
