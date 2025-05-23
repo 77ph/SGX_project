@@ -1866,8 +1866,7 @@ int ecall_generate_account_with_recovery(const char* modulus_hex, const char* ex
     char account_filename[256];
     snprintf(account_filename, sizeof(account_filename), "%s.account", out_address);
     
-    status = ocall_save_to_file(&ret, (uint8_t*)&new_account, sizeof(Account), account_filename);
-    if (status != SGX_SUCCESS || ret != 0) {
+    if (save_account_to_pool(out_address, &new_account) != 0) {
         LOG_ERROR_MACRO("[Enclave] generate_account_with_recovery: Failed to save account file\n");
         return -1;
     }
