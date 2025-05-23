@@ -37,17 +37,12 @@
   - [x] Add command to check backup availability
   - [x] Implement recovery mechanism from backup on new hardware
 - [ ] Add recovery process documentation
-- [ ] Add backup deletion mechanism
 
 ## Input Validation
 - [x] Enhance format and length validation of input data
 - [x] Add buffer overflow check
 - [x] Implement sanitization of all input parameters
 - [ ] Add parameter injection check (in server version)
-
-## Attack Protection
-- [ ] Add birthday attack check
-- [ ] Implement dictionary attack protection mechanism
 
 ## Access Control
 - [ ] Implement operation access control mechanism (in REST API)
