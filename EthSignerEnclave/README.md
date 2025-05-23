@@ -87,9 +87,9 @@ See [LICENSE](LICENSE) file for details.
   - `Enclave.cpp` - Enclave implementation
   - `Enclave.h` - Enclave header
   - `Enclave.edl` - Enclave Definition Language file
+  - `bearssl/` - Part BearSSL for RSA encryption
 - `lib/` - External libraries
   - `secp256k1/` - Bitcoin core secp256k1 implementation
-  - `bearssl/` - BearSSL for RSA encryption
 - `accounts/` - Account storage directory
 - `test_accounts/` - Test account storage directory
 
