@@ -46,7 +46,7 @@ make clean && make SGX_MODE=HW SGX_DEBUG=1
 ## Available Commands
 - `load_pool <address>` - Load account to pool
 - `unload_pool <address>` - Unload account from pool
-- `sign_pool <address> <message>` - Sign message with pool account
+- `sign_pool <address> <message_hash>` - Sign message_hash with pool account
 - `pool_status` - Show pool status
 - `generate_pool` - Generate new account in pool
 - `generate_pool_recovery <modulus_hex> <exponent_hex>` - Generate new account with recovery option
@@ -75,10 +75,7 @@ See [TODO.en.md](TODO.en.md) for a comprehensive list of planned security improv
 - C++ compiler with C++11 support
 
 ## License
-[Specify your license here]
-
-## Contributing
-[Add contribution guidelines if applicable]
+See [LICENSE](LICENSE) file for details.
 
 ## Project Structure
 
@@ -99,5 +96,6 @@ See [TODO.en.md](TODO.en.md) for a comprehensive list of planned security improv
 ## Acknowledgments
 
 - Intel SGX SDK team
-- Ethereum Foundation for secp256k1 implementation
+- Bitcoin Core team for libsecp256k1 implementation
 - BearSSL team for RSA implementation 
+- SHA3IUF for Keccak implementation
