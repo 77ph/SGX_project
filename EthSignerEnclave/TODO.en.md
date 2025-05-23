@@ -17,8 +17,6 @@
 
 ## Audit and Logging
 - [x] Add secure logging for critical operations
-- [ ] Add suspicious activity monitoring
-- [ ] Implement suspicious operation alert mechanism
 
 ## State Management
 - [x] Implement account pool in memory:
