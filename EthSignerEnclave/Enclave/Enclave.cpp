@@ -1871,7 +1871,31 @@ int ecall_generate_account_with_recovery(const char* modulus_hex, const char* ex
         return -1;
     }
 
-    LOG_INFO_MACRO("[Enclave] generate_account_with_recovery: Success - account %s generated\n", out_address);
+    // Add account to pool
+    int free_slot = -1;
+    for (int i = 0; i < MAX_POOL_SIZE; i++) {
+        if (!account_pool.accounts[i].account.is_initialized) {
+            free_slot = i;
+            break;
+        }
+    }
+
+    if (free_slot == -1) {
+        LOG_ERROR_MACRO("[Enclave] generate_account_with_recovery: No free slots in pool\n");
+        return -1;
+    }
+
+    if (!account_index_insert(new_account.address, free_slot)) {
+        LOG_ERROR_MACRO("[Enclave] generate_account_with_recovery: Failed to insert into account index table\n");
+        return -1;
+    }
+
+    // Copy account to pool
+    memcpy(&account_pool.accounts[free_slot].account, &new_account, sizeof(Account));
+    account_pool.accounts[free_slot].account.use_count = 0;
+    account_pool.accounts[free_slot].account.is_initialized = true;
+
+    LOG_INFO_MACRO("[Enclave] generate_account_with_recovery: Success - account %s generated and added to pool at index %d\n", out_address, free_slot);
     return 0;
 }
 
