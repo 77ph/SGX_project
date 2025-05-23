@@ -189,17 +189,20 @@ void account_index_clear() {
 
 // Helper function to convert hex string to bytes
 static size_t hex_to_bytes(const char* hex_str, uint8_t* out_bytes, size_t max_out_len) {
+    LOG_INFO_MACRO("[Enclave] hex_to_bytes: Starting conversion\n");
+    LOG_INFO_MACRO("[Enclave] hex_to_bytes: Input hex string: %s\n", hex_str);
+    LOG_INFO_MACRO("[Enclave] hex_to_bytes: Max output length: %zu\n", max_out_len);
+    
     if (!hex_str || !out_bytes || max_out_len == 0) {
-        LOG_ERROR_MACRO("Invalid parameters to hex_to_bytes\n");
+        LOG_ERROR_MACRO("[Enclave] hex_to_bytes: Invalid parameters\n");
         return 0;
     }
 
     size_t hex_len = strlen(hex_str);
-    LOG_INFO_MACRO("Debug: hex_to_bytes input length: %zu\n", hex_len);
-    LOG_INFO_MACRO("Debug: hex_to_bytes input: %s\n", hex_str);
+    LOG_INFO_MACRO("[Enclave] hex_to_bytes: Input length: %zu\n", hex_len);
 
     if (hex_len < 2) {
-        LOG_ERROR_MACRO("Hex string too short\n");
+        LOG_ERROR_MACRO("[Enclave] hex_to_bytes: Hex string too short\n");
         return 0;
     }
 
@@ -208,19 +211,19 @@ static size_t hex_to_bytes(const char* hex_str, uint8_t* out_bytes, size_t max_o
     if (hex_str[0] == '0' && hex_str[1] == 'x') {
         hex_start += 2;
         hex_len -= 2;
-        LOG_INFO_MACRO("Debug: Skipped 0x prefix, new length: %zu\n", hex_len);
+        LOG_INFO_MACRO("[Enclave] hex_to_bytes: Skipped 0x prefix, new length: %zu\n", hex_len);
     }
 
     if (hex_len % 2 != 0) {
-        LOG_ERROR_MACRO("Invalid hex string length: %zu\n", hex_len);
+        LOG_ERROR_MACRO("[Enclave] hex_to_bytes: Invalid hex string length: %zu\n", hex_len);
         return 0;
     }
 
     size_t bytes_len = hex_len / 2;
-    LOG_INFO_MACRO("Debug: Will convert to %zu bytes\n", bytes_len);
+    LOG_INFO_MACRO("[Enclave] hex_to_bytes: Will convert to %zu bytes\n", bytes_len);
 
     if (bytes_len > max_out_len) {
-        LOG_ERROR_MACRO("Output buffer too small: need %zu, have %zu\n", bytes_len, max_out_len);
+        LOG_ERROR_MACRO("[Enclave] hex_to_bytes: Output buffer too small: need %zu, have %zu\n", bytes_len, max_out_len);
         return 0;
     }
 
@@ -230,12 +233,18 @@ static size_t hex_to_bytes(const char* hex_str, uint8_t* out_bytes, size_t max_o
         char* end;
         out_bytes[i] = (uint8_t)strtol(byte_str, &end, 16);
         if (*end != 0) {
-            LOG_ERROR_MACRO("Invalid hex character at position %zu: '%s'\n", i*2, byte_str);
+            LOG_ERROR_MACRO("[Enclave] hex_to_bytes: Invalid hex character at position %zu: '%s'\n", i*2, byte_str);
             return 0;
         }
     }
 
-    LOG_INFO_MACRO("Debug: Successfully converted %zu bytes\n", bytes_len);
+    LOG_INFO_MACRO("[Enclave] hex_to_bytes: Successfully converted %zu bytes\n", bytes_len);
+    LOG_INFO_MACRO("[Enclave] hex_to_bytes: Output bytes: ");
+    for (size_t i = 0; i < bytes_len; i++) {
+        LOG_INFO_MACRO("%02x", out_bytes[i]);
+    }
+    LOG_INFO_MACRO("\n");
+    
     return bytes_len;
 }
 
@@ -1667,6 +1676,12 @@ static sgx_status_t rsa_encrypt(const uint8_t* data, size_t data_len,
         return SGX_ERROR_INVALID_PARAMETER;
     }
 
+    // Check for RSA-3072 (384 bytes)
+    if (modulus_len != 384) {
+        LOG_ERROR_MACRO("Invalid modulus size: %zu bytes (expected 384 bytes for RSA-3072)\n", modulus_len);
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+
     // Debug: Print data before encryption
     LOG_INFO_MACRO("Debug: Data before encryption:\n");
     LOG_INFO_MACRO("Private key: ");
@@ -1711,16 +1726,25 @@ static sgx_status_t rsa_encrypt(const uint8_t* data, size_t data_len,
         return SGX_ERROR_INVALID_PARAMETER;
     }
 
+    // Ensure output buffer is exactly modulus size
     if (*encrypted_data_len < modulus_len) {
         LOG_ERROR_MACRO("Output buffer too small (need %zu bytes)\n", modulus_len);
         return SGX_ERROR_INVALID_PARAMETER;
     }
 
-    // Проверяем, что экспонента равна 0x10001 (65537)
-    if (exponent_len != 3 || exponent[0] != 0x01 || exponent[1] != 0x00 || exponent[2] != 0x01) {
-        LOG_ERROR_MACRO("Invalid exponent: must be 0x10001 (65537)\n");
+    // Проверяем значение экспоненты, а не её длину
+    uint32_t e_value = 0;
+    for (size_t i = 0; i < exponent_len; i++) {
+        e_value = (e_value << 8) | exponent[i];
+    }
+
+    if (e_value != 0x10001) {  // 65537
+        LOG_ERROR_MACRO("Invalid exponent value: must be 0x10001 (65537)\n");
         return SGX_ERROR_INVALID_PARAMETER;
     }
+
+    // Clear output buffer
+    memset(encrypted_data, 0, *encrypted_data_len);
 
     // Encrypt with RSA OAEP
     const br_prng_class* prng = &enclave_prng_class;
@@ -1731,7 +1755,7 @@ static sgx_status_t rsa_encrypt(const uint8_t* data, size_t data_len,
         0,                 // Label length
         &pk,               // RSA public key
         encrypted_data,    // Output buffer (dst)
-        *encrypted_data_len, // Output buffer size (dst_max_len)
+        modulus_len,       // Output buffer size (must be exactly modulus size)
         data,              // Data to encrypt (src)
         data_len           // Data length (src_len)
     );
@@ -1741,8 +1765,14 @@ static sgx_status_t rsa_encrypt(const uint8_t* data, size_t data_len,
         return SGX_ERROR_UNEXPECTED;
     }
 
+    // Verify output length matches modulus size
+    if (out_len != modulus_len) {
+        LOG_ERROR_MACRO("Unexpected output length: got %zu, expected %zu\n", out_len, modulus_len);
+        return SGX_ERROR_UNEXPECTED;
+    }
+
     // Debug: Print encrypted data
-    LOG_INFO_MACRO("Debug: Encrypted data:\n");
+    LOG_INFO_MACRO("Debug: Encrypted data (length: %zu):\n", out_len);
     for (int i = 0; i < out_len; i++) {
         LOG_INFO_MACRO("%02x", encrypted_data[i]);
     }
@@ -1752,143 +1782,97 @@ static sgx_status_t rsa_encrypt(const uint8_t* data, size_t data_len,
     return SGX_SUCCESS;
 }
 
-int ecall_generate_account_with_recovery(const char* hex_modulus, const char* hex_exponent, char* out_address) {
-    if (!hex_modulus || !hex_exponent || !out_address) {
-        LOG_ERROR_MACRO("Invalid input parameters\n");
+int ecall_generate_account_with_recovery(const char* modulus_hex, const char* exponent_hex, char* out_address) {
+    LOG_INFO_MACRO("[Enclave] generate_account_with_recovery: Starting\n");
+    LOG_INFO_MACRO("[Enclave] generate_account_with_recovery: Input modulus: %s\n", modulus_hex);
+    LOG_INFO_MACRO("[Enclave] generate_account_with_recovery: Input exponent: %s\n", exponent_hex);
+
+    // Validate input parameters
+    if (!modulus_hex || !exponent_hex || !out_address) {
+        LOG_ERROR_MACRO("[Enclave] generate_account_with_recovery: Invalid input parameters\n");
         return -1;
     }
 
-    // Decode hex strings into byte arrays
-    uint8_t modulus[384] = {0};  // Инициализируем нулями
-    size_t modulus_len = hex_to_bytes(hex_modulus, modulus, sizeof(modulus));
-    if (modulus_len == 0) {
-        LOG_ERROR_MACRO("Failed to parse hex modulus\n");
+    // Validate modulus length (should be 384 bytes = 768 hex chars)
+    size_t modulus_len = strlen(modulus_hex);
+    if (modulus_len != 768) {
+        LOG_ERROR_MACRO("[Enclave] generate_account_with_recovery: Invalid modulus length: %zu hex chars (expected 768 for RSA-3072)\n", modulus_len);
         return -1;
     }
 
-    // Убираем ведущие нули из модуля
-    while (modulus_len > 1 && modulus[0] == 0x00) {
-        memmove(modulus, modulus + 1, --modulus_len);
-    }
-
-    // Убираем завершающие нули из модуля
-    while (modulus_len > 1 && modulus[modulus_len - 1] == 0x00) {
-        --modulus_len;
-    }
-
-    LOG_INFO_MACRO("Debug: Modulus length after cleanup: %zu\n", modulus_len);
-
-    // Используем экспоненту из входных параметров
-    uint8_t exponent[3] = {0};
-    
-    // Проверяем и обрабатываем входную экспоненту
-    const char* exp_ptr = hex_exponent;
-    LOG_INFO_MACRO("Debug: Original exponent: %s\n", hex_exponent);
-    
-    // Пропускаем ведущие нули
-    while (*exp_ptr == '0') {
-        LOG_INFO_MACRO("Debug: Skipping leading zero\n");
-        exp_ptr++;
-    }
-    
-    LOG_INFO_MACRO("Debug: Exponent after skipping zeros: %s\n", exp_ptr);
-    
-    // Если длина нечетная, добавляем ведущий ноль
-    char padded_exp[8] = {0};  // Буфер для экспоненты с ведущим нулем
-    if (strlen(exp_ptr) % 2 != 0) {
-        LOG_INFO_MACRO("Debug: Adding leading zero to make length even\n");
-        padded_exp[0] = '0';
-        char* dst = padded_exp + 1;
-        const char* src = exp_ptr;
-        while ((*dst++ = *src++) != '\0');
-        exp_ptr = padded_exp;
-    }
-    
-    size_t exponent_len = hex_to_bytes(exp_ptr, exponent, sizeof(exponent));
-    if (exponent_len == 0) {
-        LOG_ERROR_MACRO("Failed to parse hex exponent\n");
+    // Validate exponent format
+    if (strcmp(exponent_hex, "00010001") != 0) {
+        LOG_ERROR_MACRO("[Enclave] generate_account_with_recovery: Invalid exponent. Expected: 00010001\n");
         return -1;
     }
 
-    LOG_INFO_MACRO("Debug: RSA key prepared:\n");
-    LOG_INFO_MACRO("Modulus: ");
-    for (size_t i = 0; i < modulus_len; i++) {
-        LOG_INFO_MACRO("%02x", modulus[i]);
-    }
-    LOG_INFO_MACRO("\nExponent: ");
-    for (size_t i = 0; i < exponent_len; i++) {
-        LOG_INFO_MACRO("%02x", exponent[i]);
-    }
-    LOG_INFO_MACRO("\n");
+    // Convert hex strings to bytes
+    uint8_t modulus_bytes[384];
+    uint8_t exponent_bytes[4];  // Changed from 3 to 4 bytes for 32-bit exponent
 
-    // Generate Ethereum account
-    Account account = {0};
-    if (generate_account(&account) != 0) {
-        LOG_ERROR_MACRO("Account generation failed\n");
+    if (!hex_to_bytes(modulus_hex, modulus_bytes, sizeof(modulus_bytes))) {
+        LOG_ERROR_MACRO("[Enclave] generate_account_with_recovery: Failed to convert modulus to bytes\n");
         return -1;
     }
 
-    // Build account_id string from address
-    char account_id[43] = "0x";
+    if (!hex_to_bytes(exponent_hex, exponent_bytes, sizeof(exponent_bytes))) {
+        LOG_ERROR_MACRO("[Enclave] generate_account_with_recovery: Failed to convert exponent to bytes\n");
+        return -1;
+    }
+
+    // Generate new account
+    Account new_account = {0};
+    if (generate_account(&new_account) != 0) {
+        LOG_ERROR_MACRO("[Enclave] generate_account_with_recovery: Failed to generate account\n");
+        return -1;
+    }
+
+    // Format address as hex string
+    snprintf(out_address, 43, "0x");
     for (int i = 0; i < 20; i++) {
-        snprintf(account_id + 2 + i * 2, 3, "%02x", account.address[i]);
+        snprintf(out_address + 2 + i * 2, 3, "%02x", new_account.address[i]);
     }
 
-    // Save sealed account to disk
-    if (save_account_to_pool(account_id, &account) != 0) {
-        LOG_ERROR_MACRO("Failed to save account\n");
-        return -1;
-    }
+    // Prepare recovery data (private key + public key)
+    uint8_t recovery_data[97];  // 32 bytes private key + 65 bytes public key
+    memcpy(recovery_data, new_account.private_key, 32);
+    memcpy(recovery_data + 32, new_account.public_key, 65);
 
-    // Prepare data = privkey + pubkey (32 + 65 = 97 bytes)
-    uint8_t plain[97];
-    memcpy(plain, account.private_key, 32);
-    memcpy(plain + 32, account.public_key, 65);
-
-    // Calculate maximum data size for OAEP padding
-    size_t hlen = br_sha256_SIZE;  // 32 bytes for SHA-256
-    size_t max_data_len = modulus_len - (hlen << 1) - 2;  // OAEP padding size
-    
-    if (sizeof(plain) > max_data_len) {
-        LOG_ERROR_MACRO("Data too large for RSA OAEP encryption (max %zu bytes)\n", max_data_len);
-        return -1;
-    }
-
-    // Encrypt data
-    uint8_t encrypted[384] = {0};  // Размер должен быть равен размеру модуля
-    size_t encrypted_len = modulus_len;  // Используем точный размер модуля
-    sgx_status_t status = rsa_encrypt(
-        plain,
-        sizeof(plain),
-        modulus,
-        modulus_len,
-        exponent,
-        exponent_len,
-        encrypted,
-        &encrypted_len
-    );
+    // Encrypt recovery data
+    uint8_t encrypted_data[384];  // RSA-3072 output size
+    size_t encrypted_len = sizeof(encrypted_data);
+    sgx_status_t status = rsa_encrypt(recovery_data, sizeof(recovery_data),
+                                    modulus_bytes, sizeof(modulus_bytes),
+                                    exponent_bytes, sizeof(exponent_bytes),
+                                    encrypted_data, &encrypted_len);
 
     if (status != SGX_SUCCESS) {
-        LOG_ERROR_MACRO("RSA encryption failed: %d\n", status);
+        LOG_ERROR_MACRO("[Enclave] generate_account_with_recovery: Failed to encrypt recovery data\n");
         return -1;
     }
 
-    // Save recovery blob to file
-    char filename[256];
-    snprintf(filename, sizeof(filename), "%s.account.recovery", account_id);
+    // Save recovery file
+    char recovery_filename[256];
+    snprintf(recovery_filename, sizeof(recovery_filename), "%s.account.recovery", out_address);
     
-    // Save account using its address as filename
     int ret = 0;
-    status = ocall_save_to_file(&ret, encrypted, encrypted_len, filename);
+    status = ocall_save_to_file(&ret, encrypted_data, encrypted_len, recovery_filename);
     if (status != SGX_SUCCESS || ret != 0) {
-        LOG_ERROR_MACRO("Failed to save recovery file: status=%d, ret=%d\n", status, ret);
+        LOG_ERROR_MACRO("[Enclave] generate_account_with_recovery: Failed to save recovery file\n");
         return -1;
     }
 
-    // Return the address string
-    memcpy(out_address, account_id, 43);
-    LOG_INFO_MACRO("Account generated successfully: %s\n", account_id);
-    LOG_INFO_MACRO("Recovery file saved as: %s\n", filename);
+    // Save account file
+    char account_filename[256];
+    snprintf(account_filename, sizeof(account_filename), "%s.account", out_address);
+    
+    status = ocall_save_to_file(&ret, (uint8_t*)&new_account, sizeof(Account), account_filename);
+    if (status != SGX_SUCCESS || ret != 0) {
+        LOG_ERROR_MACRO("[Enclave] generate_account_with_recovery: Failed to save account file\n");
+        return -1;
+    }
+
+    LOG_INFO_MACRO("[Enclave] generate_account_with_recovery: Success - account %s generated\n", out_address);
     return 0;
 }
 

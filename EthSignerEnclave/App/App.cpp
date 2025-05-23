@@ -196,6 +196,46 @@ void print_help() {
     printf("  exit - Exit the application\n\n");
 }
 
+// Функция для преобразования hex строки в байты
+bool hex_to_bytes(const char* hex, uint8_t* bytes, size_t bytes_len) {
+    printf("[App] hex_to_bytes: Starting conversion\n");
+    printf("[App] hex_to_bytes: Input hex string: %s\n", hex);
+    printf("[App] hex_to_bytes: Input length: %zu\n", strlen(hex));
+    printf("[App] hex_to_bytes: Output buffer size: %zu\n", bytes_len);
+    
+    if (!hex || !bytes) {
+        printf("[App] hex_to_bytes: Error - null input\n");
+        return false;
+    }
+    
+    size_t hex_len = strlen(hex);
+    if (hex_len % 2 != 0) {
+        printf("[App] hex_to_bytes: Error - odd length\n");
+        return false;
+    }
+    
+    size_t expected_bytes = hex_len / 2;
+    if (expected_bytes > bytes_len) {
+        printf("[App] hex_to_bytes: Error - buffer too small (need %zu, have %zu)\n", expected_bytes, bytes_len);
+        return false;
+    }
+    
+    printf("[App] hex_to_bytes: Converting %zu hex chars to %zu bytes\n", hex_len, expected_bytes);
+    
+    for (size_t i = 0; i < hex_len; i += 2) {
+        char byte_str[3] = {hex[i], hex[i+1], '\0'};
+        char* end_ptr;
+        bytes[i/2] = (uint8_t)strtol(byte_str, &end_ptr, 16);
+        if (*end_ptr != '\0') {
+            printf("[App] hex_to_bytes: Error - invalid hex at position %zu\n", i);
+            return false;
+        }
+    }
+    
+    printf("[App] hex_to_bytes: Conversion successful\n");
+    return true;
+}
+
 int main(int argc, char *argv[]) {
     sgx_status_t status;
     sgx_launch_token_t token = {0};
@@ -234,27 +274,20 @@ int main(int argc, char *argv[]) {
     set_test_mode(false);
 
     // Interactive mode
-    char command[256];
-    char arg[256];
+    char* command = NULL;
+    size_t command_len = 0;
     printf("Enter commands (type 'exit' to quit):\n");
-    printf("Available commands:\n");
-    printf("  load_pool 0x1234...5678 - Load account to pool\n");
-    printf("  unload_pool 0x1234...5678 - Unload account from pool\n");
-    printf("  sign_pool 0x1234...5678 0000000000000000000000000000000000000000000000000000000000000001 - Sign with pool account\n");
-    printf("  pool_status - Show pool status\n");
-    printf("  generate_pool - Generate new account in pool\n");
-    printf("  generate_pool_recovery <modulus_hex> <exponent_hex> - Generate new account with recovery option\n");
-    printf("  set_log_level <level> - Set logging level (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG)\n");
-    printf("  run_tests - Run system validation tests\n");
-    printf("  help - Show this help message\n");
-    printf("  exit - Exit the application\n");
+    print_help();
 
     while (1) {
         printf("> ");
-        if (fgets(command, sizeof(command), stdin) == NULL) break;
+        ssize_t read = getline(&command, &command_len, stdin);
+        if (read == -1) break;
         
         // Remove newline
         command[strcspn(command, "\n")] = 0;
+        
+        printf("Debug: Input length: %zu\n", strlen(command));
         
         if (strcmp(command, "exit") == 0) {
             break;
@@ -264,219 +297,217 @@ int main(int argc, char *argv[]) {
         char* space = strchr(command, ' ');
         if (space) {
             *space = '\0';
-            strcpy(arg, space + 1);
-        } else {
-            arg[0] = '\0';
-        }
-        if (strcmp(command, "load_pool") == 0) {
-            if (strlen(arg) < 42 || strncmp(arg, "0x", 2) != 0) {
-                printf("Error: Invalid Ethereum address format. Expected: 0x followed by 40 hex characters\n");
-                continue;
-            }
-            printf("Loading account %s to pool...\n", arg);
-            status = ecall_load_account_to_pool(global_eid, &retval, arg);
-        if (status != SGX_SUCCESS) {
-                printf("Error: Failed to load account to pool\n");
-                continue;
-            }
-            if (retval < 0) {
-                printf("Error: Failed to load account to pool\n");
-            } else {
-                printf("Account %s successfully loaded to pool at index %d\n", arg, retval);
-            }
-        }
-        else if (strcmp(command, "unload_pool") == 0) {
-            if (strlen(arg) < 42 || strncmp(arg, "0x", 2) != 0) {
-                printf("Error: Invalid Ethereum address format. Expected: 0x followed by 40 hex characters\n");
-                continue;
-            }
-            status = ecall_unload_account_from_pool(global_eid, &retval, arg);
-            if (status != SGX_SUCCESS || retval != 0) {
-                printf("Error: Failed to unload account from pool\n");
-                continue;
-            }
-            printf("Account %s unloaded from pool successfully\n", arg);
-        }
-        else if (strcmp(command, "sign_pool") == 0) {
-            char* space = strchr(arg, ' ');
-            if (!space) {
-                printf("Error: Invalid format. Expected: sign_pool <address> <tx_hash>\n");
-                continue;
-            }
-            *space = '\0';
-            char* tx_hash = space + 1;
+            char* arg = space + 1;
+            printf("Debug: Command: '%s'\n", command);
+            printf("Debug: Arguments: '%s'\n", arg);
 
-            if (strlen(arg) < 42 || strncmp(arg, "0x", 2) != 0) {
-                printf("Error: Invalid Ethereum address format\n");
-                continue;
-            }
-            if (strlen(tx_hash) != 64) {
-                printf("Error: Transaction hash must be 64 hex characters\n");
-                continue;
-            }
-
-            // Convert hex string to bytes
-            uint8_t tx_hash_bytes[32];
-            for (int i = 0; i < 32; i++) {
-                char byte_str[3] = {tx_hash[i*2], tx_hash[i*2+1], '\0'};
-                tx_hash_bytes[i] = (uint8_t)strtol(byte_str, NULL, 16);
-            }
-
-            uint8_t signature[65];
-            status = ecall_sign_with_pool_account(global_eid, &retval, arg, tx_hash_bytes, sizeof(tx_hash_bytes), signature, sizeof(signature));
-            if (status != SGX_SUCCESS || retval != 0) {
-                printf("Error: Failed to sign with pool account\n");
-                continue;
-            }
-
-            // Print signature in hex
-            printf("Signature: ");
-            for (int i = 0; i < 65; i++) {
-        printf("%02x", signature[i]);
-    }
-    printf("\n");
-        }
-        else if (strcmp(command, "pool_status") == 0) {
-            uint32_t total_accounts = 0;
-            uint32_t active_accounts = 0;
-            char account_addresses[4300] = {0};
-            
-            status = ecall_get_pool_status(global_eid, &retval, &total_accounts, &active_accounts, account_addresses);
-            if (status != SGX_SUCCESS || retval != 0) {
-                printf("Error: Failed to get pool status\n");
-                continue;
-            }
-            
-            printf("Pool status:\n");
-            printf("Total accounts: %u\n", total_accounts);
-            printf("Active accounts: %u\n", active_accounts);
-            if (total_accounts > 0) {
-                printf("Account addresses: %s\n", account_addresses);
-            }
-            
-            // Display account files from disk
-            printf("\nAccount files in %s/:\n", g_is_test_mode ? "test_accounts" : "accounts");
-            list_account_files();
-        }
-        else if (strcmp(command, "generate_pool") == 0) {
-            char account_address[43] = {0};
-            status = ecall_generate_account_to_pool(global_eid, &retval, account_address);
-            if (status != SGX_SUCCESS || retval < 0) {
-                printf("Error: Failed to generate account in pool\n");
-                continue;
-            }
-            printf("Account generated in pool at index %d\n", retval);
-            printf("Account address: %s\n", account_address);
-        }
-        else if (strncmp(command, "generate_pool_recovery ", 22) == 0) {
-            // Получаем modulus и exponent из аргумента
-            char full_line[4096];
-            printf("Enter modulus and exponent (hex): ");
-            if (fgets(full_line, sizeof(full_line), stdin) == NULL) {
-                printf("Error reading input\n");
-                continue;
-            }
-            
-            // Удаляем trailing newline
-            full_line[strcspn(full_line, "\n")] = 0;
-            
-            printf("Debug: Input line: '%s'\n", full_line);
-            
-            // Ищем последний пробел в строке
-            const char* last_space = strrchr(full_line, ' ');
-            if (!last_space) {
-                printf("Error: Invalid format. Expected: <modulus_hex> <exponent_hex>\n");
-                printf("Debug: No space found in input\n");
-                continue;
-            }
-            
-            // Разделяем строку на modulus и exponent
-            char modulus_hex[2048] = {0};
-            char exponent_hex[32] = {0};
-            
-            // Копируем modulus (до последнего пробела)
-            size_t modulus_len = last_space - full_line;
-            if (modulus_len >= sizeof(modulus_hex)) {
-                printf("Error: Modulus too long\n");
-                continue;
-            }
-            strncpy(modulus_hex, full_line, modulus_len);
-            modulus_hex[modulus_len] = '\0';
-            
-            // Копируем exponent (после последнего пробела)
-            strncpy(exponent_hex, last_space + 1, sizeof(exponent_hex) - 1);
-            exponent_hex[sizeof(exponent_hex) - 1] = '\0';
-
-            if (strlen(modulus_hex) == 0 || strlen(exponent_hex) == 0) {
-                printf("Error: Both modulus and exponent are required\n");
-                printf("Debug: Modulus length: %zu, Exponent length: %zu\n", strlen(modulus_hex), strlen(exponent_hex));
-                continue;
-            }
-
-            printf("Debug: Modulus (hex): %s\n", modulus_hex);
-            printf("Debug: Exponent (hex): %s\n", exponent_hex);
-
-            // Вызываем Enclave
-            char account_address[43] = {0};
-            status = ecall_generate_account_with_recovery(global_eid, &retval, 
-                modulus_hex, exponent_hex, account_address);
-            if (status != SGX_SUCCESS) {
-                printf("Error: Enclave call failed with status: %d\n", status);
-                continue;
-            }
-            if (retval < 0) {
-                printf("Error: Failed to generate account with recovery (error code: %d)\n", retval);
-                continue;
-            }
-            printf("Account generated successfully: %s\n", account_address);
-            printf("Recovery file saved as: %s.account.recovery\n", account_address);
-        }
-        else if (strcmp(command, "help") == 0) {
-            print_help();
-        }
-        else if (strcmp(command, "set_log_level") == 0) {
-            int level = atoi(arg);
-            if (level >= 0 && level <= 3) {
-                int retval;
-                if (ecall_set_log_level(global_eid, &retval, level) == SGX_SUCCESS && retval == 0) {
-                    printf("Log level set to %d\n", level);
-                } else {
-                    printf("Failed to set log level\n");
+            if (strcmp(command, "load_pool") == 0) {
+                if (strlen(arg) < 42 || strncmp(arg, "0x", 2) != 0) {
+                    printf("Error: Invalid Ethereum address format. Expected: 0x followed by 40 hex characters\n");
+                    continue;
                 }
-            } else {
-                printf("Invalid log level. Use 0-3:\n");
-                printf("  0: ERROR only\n");
-                printf("  1: WARNING and ERROR\n");
-                printf("  2: INFO, WARNING and ERROR\n");
-                printf("  3: DEBUG, INFO, WARNING and ERROR\n");
+                printf("Loading account %s to pool...\n", arg);
+                status = ecall_load_account_to_pool(global_eid, &retval, arg);
+                if (status != SGX_SUCCESS) {
+                    printf("Error: Failed to load account to pool\n");
+                    continue;
+                }
+                if (retval < 0) {
+                    printf("Error: Failed to load account to pool\n");
+                } else {
+                    printf("Account %s successfully loaded to pool at index %d\n", arg, retval);
+                }
             }
-        }
-        else if (strcmp(command, "run_tests") == 0) {
-            // Enable test mode
-            set_test_mode(true);
-            
-            printf("\n=== Starting System Tests ===\n");
-            printf("Note: During testing, you may see error messages. These are expected and part of the test process.\n");
-            printf("The tests are verifying that the system correctly handles various error conditions.\n\n");
-            
-            status = ecall_test_function(global_eid, &retval);
-            if (status != SGX_SUCCESS || retval != 0) {
-                printf("Error: Test function failed\n");
-                continue;
+            else if (strcmp(command, "unload_pool") == 0) {
+                if (strlen(arg) < 42 || strncmp(arg, "0x", 2) != 0) {
+                    printf("Error: Invalid Ethereum address format. Expected: 0x followed by 40 hex characters\n");
+                    continue;
+                }
+                status = ecall_unload_account_from_pool(global_eid, &retval, arg);
+                if (status != SGX_SUCCESS || retval != 0) {
+                    printf("Error: Failed to unload account from pool\n");
+                    continue;
+                }
+                printf("Account %s unloaded from pool successfully\n", arg);
             }
+            else if (strcmp(command, "sign_pool") == 0) {
+                char* space = strchr(arg, ' ');
+                if (!space) {
+                    printf("Error: Invalid format. Expected: sign_pool <address> <tx_hash>\n");
+                    continue;
+                }
+                *space = '\0';
+                char* tx_hash = space + 1;
+
+                if (strlen(arg) < 42 || strncmp(arg, "0x", 2) != 0) {
+                    printf("Error: Invalid Ethereum address format\n");
+                    continue;
+                }
+                if (strlen(tx_hash) != 64) {
+                    printf("Error: Transaction hash must be 64 hex characters\n");
+                    continue;
+                }
+
+                // Convert hex string to bytes
+                uint8_t tx_hash_bytes[32];
+                for (int i = 0; i < 32; i++) {
+                    char byte_str[3] = {tx_hash[i*2], tx_hash[i*2+1], '\0'};
+                    tx_hash_bytes[i] = (uint8_t)strtol(byte_str, NULL, 16);
+                }
+
+                uint8_t signature[65];
+                status = ecall_sign_with_pool_account(global_eid, &retval, arg, tx_hash_bytes, sizeof(tx_hash_bytes), signature, sizeof(signature));
+                if (status != SGX_SUCCESS || retval != 0) {
+                    printf("Error: Failed to sign with pool account\n");
+                    continue;
+                }
+
+                // Print signature in hex
+                printf("Signature: ");
+                for (int i = 0; i < 65; i++) {
+                    printf("%02x", signature[i]);
+                }
+                printf("\n");
+            }
+            else if (strcmp(command, "generate_pool_recovery") == 0) {
+                printf("[App] generate_pool_recovery: Starting command processing\n");
+                
+                // Получаем modulus и exponent из аргументов
+                char* modulus_hex = arg;
+                char* exponent_hex = NULL;
+                
+                // Ищем пробел между modulus и exponent
+                space = strchr(arg, ' ');
+                if (!space) {
+                    printf("[App] generate_pool_recovery: Error - invalid format\n");
+                    continue;
+                }
+                
+                // Разделяем строку
+                *space = '\0';
+                exponent_hex = space + 1;
+                
+                printf("[App] generate_pool_recovery: Parsed arguments:\n");
+                printf("[App] generate_pool_recovery: Modulus (hex): %s\n", modulus_hex);
+                printf("[App] generate_pool_recovery: Exponent (hex): %s\n", exponent_hex);
+                
+                // Проверяем длину модуля (должно быть 768 hex символов для RSA-3072)
+                if (strlen(modulus_hex) != 768) {
+                    printf("Error: Invalid modulus length (%zu). Expected 768 hex characters for RSA-3072\n", strlen(modulus_hex));
+                    continue;
+                }
+
+                // Проверяем формат экспоненты (должно быть "00010001")
+                if (strlen(exponent_hex) != 8 || strcmp(exponent_hex, "00010001") != 0) {
+                    printf("Error: Invalid exponent format. Expected '00010001'\n");
+                    continue;
+                }
+                
+                // Вызываем Enclave
+                char account_address[43] = {0};
+                
+                printf("[App] generate_pool_recovery: Calling enclave\n");
+                status = ecall_generate_account_with_recovery(global_eid, &retval, 
+                    modulus_hex, exponent_hex, account_address);
+                    
+                if (status != SGX_SUCCESS) {
+                    printf("[App] generate_pool_recovery: Enclave call failed (status: %d)\n", status);
+                    continue;
+                }
+                
+                if (retval < 0) {
+                    printf("[App] generate_pool_recovery: Failed to generate account (error: %d)\n", retval);
+                    continue;
+                }
+                
+                printf("[App] generate_pool_recovery: Success - account %s generated\n", account_address);
+                printf("[App] generate_pool_recovery: Recovery file saved as %s.account.recovery\n", account_address);
+            }
+            else if (strcmp(command, "set_log_level") == 0) {
+                int level = atoi(arg);
+                if (level >= 0 && level <= 3) {
+                    int retval;
+                    if (ecall_set_log_level(global_eid, &retval, level) == SGX_SUCCESS && retval == 0) {
+                        printf("Log level set to %d\n", level);
+                    } else {
+                        printf("Failed to set log level\n");
+                    }
+                } else {
+                    printf("Invalid log level. Use 0-3:\n");
+                    printf("  0: ERROR only\n");
+                    printf("  1: WARNING and ERROR\n");
+                    printf("  2: INFO, WARNING and ERROR\n");
+                    printf("  3: DEBUG, INFO, WARNING and ERROR\n");
+                }
+            }
+        } else {
+            printf("Debug: Command: '%s' (no arguments)\n", command);
             
-            printf("\n=== System Tests Completed Successfully ===\n");
-            printf("All security and functionality tests passed. The system is secure and ready for use.\n\n");
-            
-            // Clean up test accounts and disable test mode
-            cleanup_test_accounts();
-            set_test_mode(false);
-        }
-        else {
-            printf("Unknown command. Type 'help' for available commands.\n");
+            if (strcmp(command, "pool_status") == 0) {
+                uint32_t total_accounts = 0;
+                uint32_t active_accounts = 0;
+                char account_addresses[4300] = {0};
+                
+                status = ecall_get_pool_status(global_eid, &retval, &total_accounts, &active_accounts, account_addresses);
+                if (status != SGX_SUCCESS || retval != 0) {
+                    printf("Error: Failed to get pool status\n");
+                    continue;
+                }
+                
+                printf("Pool status:\n");
+                printf("Total accounts: %u\n", total_accounts);
+                printf("Active accounts: %u\n", active_accounts);
+                if (total_accounts > 0) {
+                    printf("Account addresses: %s\n", account_addresses);
+                }
+                
+                // Display account files from disk
+                printf("\nAccount files in %s/:\n", g_is_test_mode ? "test_accounts" : "accounts");
+                list_account_files();
+            }
+            else if (strcmp(command, "generate_pool") == 0) {
+                char account_address[43] = {0};
+                status = ecall_generate_account_to_pool(global_eid, &retval, account_address);
+                if (status != SGX_SUCCESS || retval < 0) {
+                    printf("Error: Failed to generate account in pool\n");
+                    continue;
+                }
+                printf("Account generated in pool at index %d\n", retval);
+                printf("Account address: %s\n", account_address);
+            }
+            else if (strcmp(command, "help") == 0) {
+                print_help();
+            }
+            else if (strcmp(command, "run_tests") == 0) {
+                // Enable test mode
+                set_test_mode(true);
+                
+                printf("\n=== Starting System Tests ===\n");
+                printf("Note: During testing, you may see error messages. These are expected and part of the test process.\n");
+                printf("The tests are verifying that the system correctly handles various error conditions.\n\n");
+                
+                status = ecall_test_function(global_eid, &retval);
+                if (status != SGX_SUCCESS || retval != 0) {
+                    printf("Error: Test function failed\n");
+                    continue;
+                }
+                
+                printf("\n=== System Tests Completed Successfully ===\n");
+                printf("All security and functionality tests passed. The system is secure and ready for use.\n\n");
+                
+                // Clean up test accounts and disable test mode
+                cleanup_test_accounts();
+                set_test_mode(false);
+            }
+            else {
+                printf("Unknown command. Type 'help' for available commands.\n");
+            }
         }
         printf("\n");
     }
+
+    // Free the command buffer
+    free(command);
 
     // Destroy the enclave
     sgx_destroy_enclave(global_eid);
