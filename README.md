@@ -167,13 +167,9 @@ For practical development and minimal disruption to the working SGX SDK setup:
 
 ## Next Steps
 
-We will now explore:
-- Running a Python script from within the SGX enclave using the SDK (`system()` or `popen()`).
-- Passing signed or encrypted data between the Python side and the enclave.
-- Building minimal ECALL/OCALL interface for secure data exchange.
+We will now explore: [EthSignerEnclave](EthSignerEnclave/README.md)
 
 ---
-
 ## Hardware & Environment
 
 - **CPU:** Intel Xeon E3-1275 v6
