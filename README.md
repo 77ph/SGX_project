@@ -7,6 +7,8 @@ Build a secure Ethereum signer that runs inside an Intel SGX enclave to protect 
 - Stores the ECDSA private key internally.
 - Signs Ethereum messages and transactions without ever exposing the key.
 - Exposes a minimal API (later via CLI and optionally REST).
+- Implements secure account pool management.
+- Provides account recovery through RSA-3072 encryption.
 
 > We aim for compatibility with Ethereum tooling (e.g., `web3.py`, `eth_account`) by returning `(r, s, v)` and enforcing EIP-2 (low `s` value).
 
@@ -183,10 +185,57 @@ We will now explore:
 
 ---
 ## EthSignerEnclave
-```
-Based: https://github.com/digawp/hello-enclave
 
+### Current Status
+- ✅ Account pool implementation with secure sealing
+- ✅ RSA-3072 based account recovery system
+- ✅ Enhanced entropy generation and validation
+- ✅ Comprehensive test suite for security validation
+- ✅ Interactive CLI with pool management commands
+- ✅ Hardware-level protection against timing attacks
+
+### Building and Running
+```bash
 cd EthSignerEnclave
 make clean
-make
+make SGX_MODE=HW SGX_DEBUG=1
+./app
 ```
+
+### Available Commands
+- `load_pool <address>` - Load account to pool
+- `unload_pool <address>` - Unload account from pool
+- `sign_pool <address> <message>` - Sign message with pool account
+- `pool_status` - Show pool status
+- `generate_pool` - Generate new account in pool
+- `generate_pool_recovery <modulus_hex> <exponent_hex>` - Generate new account with recovery option
+- `get_recovery_base64 <address>` - Get base64 encoded recovery file
+- `set_log_level <level>` - Set logging level (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG)
+- `run_tests` - Run system validation tests
+- `help` - Show help message
+- `exit` - Exit the application
+
+### Security Features
+- Hardware-based entropy generation
+- Secure key storage within SGX enclave
+- Protected memory for sensitive operations
+- Secure state sealing/unsealing
+- RSA-3072 encryption for account recovery
+- Input validation and sanitization
+- HMAC verification for data integrity
+
+### Next Steps
+1. Clean up debug logging in Enclave.cpp and App.cpp
+2. Implement REST API interface
+3. Add comprehensive documentation
+4. Enhance error handling and recovery mechanisms
+5. Implement additional security features from TODO.md
+
+### Project Structure
+- `App/` - Untrusted application code
+- `Enclave/` - Trusted enclave code
+- `lib/` - External libraries (secp256k1, BearSSL)
+- `accounts/` - Account storage directory
+- `test_accounts/` - Test account storage directory
+
+For detailed information about the project, see the [EthSignerEnclave README](EthSignerEnclave/README.md). 

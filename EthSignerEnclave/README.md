@@ -1,12 +1,13 @@
 # EthSignerEnclave
 
 ## Overview
-EthSignerEnclave is a secure Ethereum transaction signing system built using Intel SGX technology. It provides a hardware-protected environment for generating and managing Ethereum private keys, as well as signing transactions with enhanced security.
+EthSignerEnclave is a secure Ethereum transaction signing system built using Intel SGX technology. It provides a hardware-protected environment for generating and managing Ethereum private keys, as well as signing transactions with enhanced security. The system implements an account pool for efficient key management and supports account recovery through RSA encryption.
 
 ## Features
 - Secure private key generation using hardware-based entropy
 - Transaction signing within SGX enclave
-- Account state management with secure sealing
+- Account pool management with secure sealing
+- Account recovery through RSA-3072 encryption
 - Interactive command-line interface
 - Test functions for security validation
 - Hardware-level protection against timing and side-channel attacks
@@ -16,17 +17,20 @@ EthSignerEnclave is a secure Ethereum transaction signing system built using Int
 - Secure key storage within SGX enclave
 - Protected memory for sensitive operations
 - Secure state sealing/unsealing
+- RSA-3072 encryption for account recovery
 - Input validation and sanitization
 - Protection against common attack vectors
 
 ## Recent Improvements
+- Implemented account pool for efficient key management
+- Added RSA-3072 based account recovery system
 - Enhanced entropy generation and validation
 - Added test functions for security validation:
   - Entropy generation testing
   - Save/load cycle testing
   - Transaction signing and verification testing
+  - Pool operations testing
 - Improved interactive menu with test commands
-- Added comprehensive security TODO list
 
 ## Building and Running
 1. Install Intel SGX SDK and dependencies
@@ -40,24 +44,29 @@ make clean && make SGX_MODE=HW SGX_DEBUG=1
 ```
 
 ## Available Commands
-- `generate_account` - Generate a new Ethereum account
-- `sign_tx 0000000000000000000000000000000000000000000000000000000000000001` - Sign a transaction with the stored private key
-- `save_account_state` - Save the current account state
-- `load_account_state` - Load a previously saved account state
-- `test_key_strength` - Test private key generation and strength
-- `test_entropy` - Test entropy generation
-- `test_save_load` - Test the save/load cycle
-- `test_sign_verify` - Test transaction signing and verification
+- `load_pool <address>` - Load account to pool
+- `unload_pool <address>` - Unload account from pool
+- `sign_pool <address> <message>` - Sign message with pool account
+- `pool_status` - Show pool status
+- `generate_pool` - Generate new account in pool
+- `generate_pool_recovery <modulus_hex> <exponent_hex>` - Generate new account with recovery option
+- `get_recovery_base64 <address>` - Get base64 encoded recovery file
+- `set_log_level <level>` - Set logging level (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG)
+- `run_tests` - Run system validation tests
+- `help` - Show help message
+- `exit` - Exit the application
 
 ## Security Considerations
 - All sensitive operations are performed within the SGX enclave
 - Private keys never leave the secure environment
 - Hardware-based protection against timing and side-channel attacks
 - Secure state management with sealing/unsealing
+- RSA-3072 encryption for account recovery
 - Input validation and sanitization for all operations
+- HMAC verification for data integrity
 
 ## Future Improvements
-See [TODO.md](TODO.md) for a comprehensive list of planned security improvements.
+See [TODO.en.md](TODO.en.md) for a comprehensive list of planned security improvements.
 
 ## Requirements
 - Intel SGX-capable processor
@@ -83,8 +92,12 @@ See [TODO.md](TODO.md) for a comprehensive list of planned security improvements
   - `Enclave.edl` - Enclave Definition Language file
 - `lib/` - External libraries
   - `secp256k1/` - Ethereum's secp256k1 implementation
+  - `bearssl/` - BearSSL for RSA encryption
+- `accounts/` - Account storage directory
+- `test_accounts/` - Test account storage directory
 
 ## Acknowledgments
 
 - Intel SGX SDK team
-- Ethereum Foundation for secp256k1 implementation 
+- Ethereum Foundation for secp256k1 implementation
+- BearSSL team for RSA implementation 
